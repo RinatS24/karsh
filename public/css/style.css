@@ -167,7 +167,16 @@ a { color: var(--accent); text-decoration: none; }
 .upload-zone .label { color: var(--text-dim); font-size: 14px; }
 .upload-zone .icon { font-size: 32px; margin-bottom: 8px; opacity: .6; }
 
-.checklist { list-style: none; padding: 0; margin: 0; }
+.photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.upload-zone.small { padding: 14px 8px; }
+.upload-zone.small .icon { font-size: 20px; margin-bottom: 4px; }
+.upload-zone.small .label { font-size: 13px; }
+.upload-zone.small img { max-height: 90px; }
+.upload-zone.small.has-file { padding: 6px; }
+
+.checklist {
+  list-style: none; padding: 0; margin: 0;
+}
 .checklist li { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
 .checklist input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
 
