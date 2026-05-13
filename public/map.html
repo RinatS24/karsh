@@ -8,7 +8,6 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
     .leaflet-container { background: #1a1d23; }
-    .leaflet-tile { filter: brightness(.7) invert(1) contrast(3) hue-rotate(200deg) saturate(.3) brightness(.7); }
   </style>
 </head>
 <body>
@@ -121,6 +120,11 @@
 
     function initMap() {
       map = L.map('map', { zoomControl: true }).setView([55.7558, 37.6173], 13);
+      // L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      //   attribution: '© OpenStreetMap, © CARTO',
+      //   subdomains: 'abcd',
+      //   maxZoom: 20
+      // }).addTo(map);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap', maxZoom: 19
       }).addTo(map);
