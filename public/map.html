@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Карта — CarShare</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    .leaflet-container { background: #1a1d23; }
+    .leaflet-tile { filter: brightness(.7) invert(1) contrast(3) hue-rotate(200deg) saturate(.3) brightness(.7); }
+  </style>
+</head>
+<body>
+  <div class="page map-page">
+    <header class="app-header">
+      <div class="logo">Car<span>Share</span></div>
+      <div class="nav">
+        <a href="/map.html" class="active">Карта</a>
+        <a href="/profile.html">Профиль</a>
+        <a href="#" id="logoutLink">Выйти</a>
+      </div>
+    </header>
+
+    <div class="map-wrap">
+      <div id="map"></div>
+      <div class="banner" id="banner" style="display:none"></div>
+
+      <div class="car-panel hidden" id="carPanel">
+        <button class="close-x" id="closeCar">×</button>
+        <div class="car-head">
+          <img class="car-img" id="cpImg" alt="">
+          <div>
+            <div class="car-title" id="cpTitle"></div>
+            <div class="car-sub" id="cpPlate"></div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div><b id="cpRate"></b>тариф ₽/мин</div>
+          <div><b id="cpFuel"></b>топливо</div>
+          <div><b id="cpDist"></b>до авто</div>
+        </div>
+        <button class="btn btn-primary" id="bookBtn">Забронировать · депозит 3000 ₽</button>
+      </div>
+
+      <div class="trip-widget" id="bookingWidget" style="display:none">
+        <div class="head">
+          <div>
+            <div style="font-size:13px;color:var(--text-dim)">Бронь · авто ждёт</div>
+            <div id="bwCar" style="font-weight:700;font-size:17px"></div>
+          </div>
+          <div class="timer" id="bwTimer">15:00</div>
+        </div>
+        <div class="meta" id="bwMeta"></div>
+        <div style="height:12px"></div>
+        <div class="row">
+          <button class="btn btn-primary" id="openCarBtn">Открыть авто</button>
+          <button class="btn btn-secondary" id="cancelBtn">Отменить</button>
+        </div>
+      </div>
+
+      <div class="trip-widget" id="tripWidget" style="display:none">
+        <div class="head">
+          <div>
+            <div style="font-size:13px;color:var(--text-dim)">Поездка</div>
+            <div id="twCar" style="font-weight:700;font-size:17px"></div>
+          </div>
+          <div class="timer" id="twTimer">0:00</div>
+        </div>
+        <div class="meta" id="twMeta"></div>
+        <div style="height:12px"></div>
+        <button class="btn btn-danger" id="finishBtn">Завершить поездку</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="checklistModal" style="display:none">
+    <div class="modal">
+      <h2>Осмотр автомобиля</h2>
+      <div class="sub">Перед началом поездки убедитесь, что у авто нет видимых повреждений.</div>
+      <ul class="checklist">
+        <li><input type="checkbox" id="ck1" checked><label for="ck1">Кузов без повреждений</label></li>
+        <li><input type="checkbox" id="ck2" checked><label for="ck2">Стёкла и зеркала целые</label></li>
+        <li><input type="checkbox" id="ck3" checked><label for="ck3">Салон чистый, без повреждений</label></li>
+        <li><input type="checkbox" id="ck4" checked><label for="ck4">Колёса в порядке</label></li>
+      </ul>
+      <div style="height:16px"></div>
+      <button class="btn btn-primary" id="ckStartBtn">Начать поездку</button>
+      <div style="height:8px"></div>
+      <button class="btn btn-ghost" id="ckCancelBtn">Отмена</button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="receiptModal" style="display:none">
+    <div class="modal">
+      <h2>Поездка завершена</h2>
+      <div class="sub">Чек отправлен на ваш e-mail</div>
+      <div class="kv"><span class="k">Время в пути</span><span id="rcTime"></span></div>
+      <div class="kv"><span class="k">Расстояние</span><span id="rcDist"></span></div>
+      <div class="kv"><span class="k">Тариф</span><span id="rcRate"></span></div>
+      <div class="kv" style="font-size:18px"><span class="k">К оплате</span><b id="rcCost"></b></div>
+      <div style="height:16px"></div>
+      <div class="alert alert-ok">✓ Оплачено картой. Депозит разморожен.</div>
+      <button class="btn btn-primary" id="rcCloseBtn">Готово</button>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/js/api.js"></script>
+  <script>
+    let map, userMarker, carMarkers = [], userPos = null, currentUser = null;
+    let activeBooking = null, activeTrip = null;
+    let bookingTimer = null, tripTimer = null;
+
+    (async () => {
+      currentUser = await requireAuth();
+      if (currentUser.status === 'awaiting_license') return window.location.href = '/license.html';
+      if (currentUser.status === 'awaiting_passport') return window.location.href = '/passport.html';
+      initMap();
+    })();
+
+    function initMap() {
+      map = L.map('map', { zoomControl: true }).setView([55.7558, 37.6173], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap', maxZoom: 19
+      }).addTo(map);
+
+      if (navigator.geolocation) {
+        showBanner('Определяем ваше местоположение...');
+        navigator.geolocation.getCurrentPosition(
+          (p) => {
+            userPos = { lat: p.coords.latitude, lon: p.coords.longitude };
+            map.setView([userPos.lat, userPos.lon], 14);
+            placeUserMarker();
+            loadCars();
+            hideBanner();
+            checkActiveBookingAndTrip();
+          },
+          () => {
+            showBanner('Геолокация недоступна. Показываем автомобили в Москве.');
+            userPos = { lat: 55.7558, lon: 37.6173 };
+            placeUserMarker();
+            loadCars();
+            checkActiveBookingAndTrip();
+            setTimeout(hideBanner, 4000);
+          },
+          { timeout: 8000 }
+        );
+      } else {
+        userPos = { lat: 55.7558, lon: 37.6173 };
+        placeUserMarker();
+        loadCars();
+        checkActiveBookingAndTrip();
+      }
+    }
+
+    function placeUserMarker() {
+      if (userMarker) userMarker.remove();
+      const icon = L.divIcon({ className: '', html: '<div class="user-marker"></div>', iconSize: [20, 20], iconAnchor: [10, 10] });
+      userMarker = L.marker([userPos.lat, userPos.lon], { icon, zIndexOffset: 1000 }).addTo(map);
+    }
+
+    async function loadCars() {
+      try {
+        const { cars } = await api(`/api/cars?lat=${userPos.lat}&lon=${userPos.lon}&radius=3`);
+        carMarkers.forEach(m => m.remove());
+        carMarkers = [];
+        cars.forEach(car => {
+          if (car.status !== 'available') return;
+          const icon = L.divIcon({
+            className: '',
+            html: `<div class="car-marker"><span>C</span></div>`,
+            iconSize: [36, 36], iconAnchor: [18, 36]
+          });
+          const m = L.marker([car.lat, car.lon], { icon }).addTo(map);
+          m.on('click', () => showCarPanel(car));
+          carMarkers.push(m);
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function showBanner(text) {
+      const b = document.getElementById('banner');
+      b.textContent = text;
+      b.style.display = 'block';
+    }
+    function hideBanner() { document.getElementById('banner').style.display = 'none'; }
+
+    let selectedCar = null;
+    function showCarPanel(car) {
+      selectedCar = car;
+      const panel = document.getElementById('carPanel');
+      document.getElementById('cpTitle').textContent = `${car.brand} ${car.model}`;
+      document.getElementById('cpPlate').textContent = car.plate;
+      document.getElementById('cpRate').textContent = car.ratePerMin;
+      document.getElementById('cpFuel').textContent = car.fuel + '%';
+      const dist = car.distance != null ? (car.distance < 1 ? `${Math.round(car.distance * 1000)} м` : `${car.distance.toFixed(1)} км`) : '—';
+      document.getElementById('cpDist').textContent = dist;
+      const img = document.getElementById('cpImg');
+      img.src = car.photo || `https://api.dicebear.com/7.x/shapes/svg?seed=${car.id}`;
+      img.onerror = () => { img.src = `https://api.dicebear.com/7.x/shapes/svg?seed=${car.id}`; };
+      panel.classList.remove('hidden');
+    }
+    document.getElementById('closeCar').addEventListener('click', () => {
+      document.getElementById('carPanel').classList.add('hidden');
+      selectedCar = null;
+    });
+
+    document.getElementById('bookBtn').addEventListener('click', async () => {
+      if (!selectedCar) return;
+      const btn = document.getElementById('bookBtn');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+      try {
+        const res = await api('/api/bookings', { method: 'POST', body: { carId: selectedCar.id } });
+        document.getElementById('carPanel').classList.add('hidden');
+        activeBooking = res.booking;
+        showBookingWidget(res.booking, res.car);
+        loadCars();
+      } catch (err) {
+        if (err.data && err.data.error === 'no_card') {
+          if (confirm('Сначала привяжите банковскую карту. Перейти в профиль?')) {
+            window.location.href = '/profile.html';
+          }
+        } else {
+          alert(err.message);
+        }
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Забронировать · депозит 3000 ₽';
+      }
+    });
+
+    function showBookingWidget(booking, car) {
+      document.getElementById('bookingWidget').style.display = 'block';
+      document.getElementById('bwCar').textContent = `${car.brand} ${car.model} · ${car.plate}`;
+      document.getElementById('bwMeta').textContent = `Депозит ${car.deposit || 3000} ₽ захолдирован. Подойдите к авто и нажмите «Открыть».`;
+      if (bookingTimer) clearInterval(bookingTimer);
+      const tick = () => {
+        const ms = new Date(booking.expiresAt).getTime() - Date.now();
+        if (ms <= 0) {
+          clearInterval(bookingTimer);
+          document.getElementById('bookingWidget').style.display = 'none';
+          alert('Срок брони истёк');
+          activeBooking = null;
+          loadCars();
+          return;
+        }
+        const s = Math.floor(ms / 1000);
+        document.getElementById('bwTimer').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+      };
+      tick();
+      bookingTimer = setInterval(tick, 1000);
+    }
+
+    document.getElementById('cancelBtn').addEventListener('click', async () => {
+      if (!activeBooking) return;
+      if (!confirm('Отменить бронь?')) return;
+      await api('/api/bookings/' + activeBooking.id, { method: 'DELETE' });
+      document.getElementById('bookingWidget').style.display = 'none';
+      if (bookingTimer) clearInterval(bookingTimer);
+      activeBooking = null;
+      loadCars();
+    });
+
+    document.getElementById('openCarBtn').addEventListener('click', () => {
+      document.getElementById('checklistModal').style.display = 'flex';
+    });
+    document.getElementById('ckCancelBtn').addEventListener('click', () => {
+      document.getElementById('checklistModal').style.display = 'none';
+    });
+    document.getElementById('ckStartBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('ckStartBtn');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Открываем авто...';
+      try {
+        const checklist = {
+          body: document.getElementById('ck1').checked,
+          glass: document.getElementById('ck2').checked,
+          interior: document.getElementById('ck3').checked,
+          wheels: document.getElementById('ck4').checked
+        };
+        const res = await api('/api/trips/start', {
+          method: 'POST',
+          body: { bookingId: activeBooking.id, lat: userPos.lat, lon: userPos.lon, checklist }
+        });
+        document.getElementById('checklistModal').style.display = 'none';
+        document.getElementById('bookingWidget').style.display = 'none';
+        if (bookingTimer) clearInterval(bookingTimer);
+        activeBooking = null;
+        activeTrip = res.trip;
+        showTripWidget(res.trip, res.car);
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        btn.disabled = false; btn.textContent = 'Начать поездку';
+      }
+    });
+
+    function showTripWidget(trip, car) {
+      document.getElementById('tripWidget').style.display = 'block';
+      document.getElementById('twCar').textContent = `${car.brand} ${car.model} · ${car.plate}`;
+      if (tripTimer) clearInterval(tripTimer);
+      const tick = () => {
+        const ms = Date.now() - new Date(trip.startedAt).getTime();
+        const s = Math.floor(ms / 1000);
+        const min = Math.floor(s / 60);
+        document.getElementById('twTimer').textContent = `${min}:${String(s % 60).padStart(2, '0')}`;
+        const cost = Math.max(1, Math.ceil(s / 60)) * trip.ratePerMin;
+        document.getElementById('twMeta').textContent = `${trip.ratePerMin} ₽/мин · текущая стоимость ${cost} ₽`;
+      };
+      tick();
+      tripTimer = setInterval(tick, 1000);
+    }
+
+    document.getElementById('finishBtn').addEventListener('click', async () => {
+      if (!activeTrip) return;
+      const btn = document.getElementById('finishBtn');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Завершаем...';
+      try {
+        const res = await api(`/api/trips/${activeTrip.id}/finish`, {
+          method: 'POST',
+          body: { lat: userPos.lat, lon: userPos.lon, distance: +(Math.random() * 5 + 1).toFixed(1) }
+        });
+        if (tripTimer) clearInterval(tripTimer);
+        document.getElementById('tripWidget').style.display = 'none';
+        const min = res.trip.minutes;
+        document.getElementById('rcTime').textContent = `${Math.floor(min / 60)} ч ${min % 60} мин`;
+        document.getElementById('rcDist').textContent = `${res.trip.distanceKm} км`;
+        document.getElementById('rcRate').textContent = `${res.trip.ratePerMin} ₽/мин`;
+        document.getElementById('rcCost').textContent = `${res.trip.cost} ₽`;
+        document.getElementById('receiptModal').style.display = 'flex';
+        activeTrip = null;
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        btn.disabled = false; btn.textContent = 'Завершить поездку';
+      }
+    });
+
+    document.getElementById('rcCloseBtn').addEventListener('click', () => {
+      document.getElementById('receiptModal').style.display = 'none';
+      loadCars();
+    });
+
+    async function checkActiveBookingAndTrip() {
+      try {
+        const tripRes = await api('/api/trips/active');
+        if (tripRes.trip) {
+          activeTrip = tripRes.trip;
+          showTripWidget(tripRes.trip, tripRes.car);
+          return;
+        }
+        const bookRes = await api('/api/bookings/active');
+        if (bookRes.booking) {
+          activeBooking = bookRes.booking;
+          showBookingWidget(bookRes.booking, bookRes.car);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    document.getElementById('logoutLink').addEventListener('click', async (e) => {
+      e.preventDefault();
+      await api('/api/logout', { method: 'POST' });
+      window.location.href = '/';
+    });
+  </script>
+</body>
+</html>

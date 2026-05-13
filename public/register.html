@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Регистрация — CarShare</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="center">
+    <div class="card" id="step1">
+      <h1>Регистрация</h1>
+      <div class="sub">Заполните анкету, на телефон придёт код подтверждения.</div>
+      <div id="alert" class="alert" style="display:none"></div>
+      <form id="regForm">
+        <div class="field">
+          <label>ФИО</label>
+          <input name="fullName" required placeholder="Иванов Иван Иванович">
+        </div>
+        <div class="field">
+          <label>E-mail</label>
+          <input type="email" name="email" required placeholder="ivanov@example.com">
+        </div>
+        <div class="field">
+          <label>Телефон</label>
+          <input name="phone" required placeholder="+7 999 123 45 67" inputmode="tel">
+          <div class="hint">На этот номер придёт SMS с кодом подтверждения</div>
+        </div>
+        <div class="field">
+          <label>Пароль</label>
+          <input type="password" name="password" required placeholder="минимум 6 символов">
+        </div>
+        <button type="submit" class="btn btn-primary" id="regBtn">Продолжить</button>
+      </form>
+      <div class="center-link">
+        Уже есть аккаунт? <a href="/">Войти</a>
+      </div>
+    </div>
+
+    <div class="card" id="step2" style="display:none">
+      <h1>Введите код</h1>
+      <div class="sub">Мы отправили 4-значный код на <b id="phoneEcho"></b></div>
+      <div id="alert2" class="alert" style="display:none"></div>
+      <form id="codeForm">
+        <div class="field">
+          <input name="code" required maxlength="4" inputmode="numeric" pattern="\d{4}" placeholder="••••" style="font-size:24px; text-align:center; letter-spacing:12px">
+        </div>
+        <button type="submit" class="btn btn-primary" id="codeBtn">Подтвердить</button>
+      </form>
+      <div class="center-link">
+        Не пришёл код? <a href="#" id="resendBtn">Отправить повторно</a>
+        <div style="margin-top:8px"><span id="timer"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    const regForm = document.getElementById('regForm');
+    const codeForm = document.getElementById('codeForm');
+    const alertEl = document.getElementById('alert');
+    const alert2 = document.getElementById('alert2');
+    const step1 = document.getElementById('step1');
+    const step2 = document.getElementById('step2');
+    let currentPhone = null;
+
+    regForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideAlert(alertEl);
+      const fd = new FormData(regForm);
+      const payload = Object.fromEntries(fd.entries());
+      const btn = document.getElementById('regBtn');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+      try {
+        const res = await api('/api/register/start', { method: 'POST', body: payload });
+        currentPhone = res.phone;
+        document.getElementById('phoneEcho').textContent = res.phone;
+        step1.style.display = 'none';
+        step2.style.display = 'block';
+        showSmsToast(res.phone, res.demoCode);
+        startTimer(120);
+      } catch (err) {
+        showError(alertEl, err.message);
+      } finally {
+        btn.disabled = false; btn.textContent = 'Продолжить';
+      }
+    });
+
+    codeForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideAlert(alert2);
+      const code = new FormData(codeForm).get('code');
+      const btn = document.getElementById('codeBtn');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+      try {
+        await api('/api/register/verify', { method: 'POST', body: { phone: currentPhone, code } });
+        window.location.href = '/license.html';
+      } catch (err) {
+        showError(alert2, err.message);
+        btn.disabled = false; btn.textContent = 'Подтвердить';
+      }
+    });
+
+    document.getElementById('resendBtn').addEventListener('click', async (e) => {
+      e.preventDefault();
+      try {
+        const res = await api('/api/register/resend', { method: 'POST', body: { phone: currentPhone } });
+        showSmsToast(currentPhone, res.demoCode);
+        startTimer(120);
+      } catch (err) {
+        showError(alert2, err.message);
+      }
+    });
+
+    let timerId = null;
+    function startTimer(sec) {
+      if (timerId) clearInterval(timerId);
+      const el = document.getElementById('timer');
+      el.style.color = 'var(--text-dim)';
+      const tick = () => {
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        el.textContent = `Код действителен ещё ${m}:${String(s).padStart(2, '0')}`;
+        if (sec <= 0) {
+          clearInterval(timerId);
+          el.textContent = 'Срок кода истёк, запросите новый';
+          el.style.color = 'var(--danger)';
+        }
+        sec--;
+      };
+      tick();
+      timerId = setInterval(tick, 1000);
+    }
+  </script>
+</body>
+</html>

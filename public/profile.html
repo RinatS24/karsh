@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Профиль — CarShare</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="page">
+    <header class="app-header">
+      <div class="logo">Car<span>Share</span></div>
+      <div class="nav">
+        <a href="/map.html">Карта</a>
+        <a href="/profile.html" class="active">Профиль</a>
+        <a href="#" id="logoutLink">Выйти</a>
+      </div>
+    </header>
+
+    <div class="container">
+      <div class="section">
+        <h2 id="userName">—</h2>
+        <div class="sub" id="userMeta">—</div>
+        <div class="kv"><span class="k">Статус аккаунта</span><span id="userStatus"></span></div>
+      </div>
+
+      <div class="section">
+        <h2>Документы</h2>
+        <div class="sub">Подтверждённые документы для аренды</div>
+        <div class="kv">
+          <span class="k">Водительское удостоверение</span>
+          <span id="licStatus"></span>
+        </div>
+        <div id="licDetails" style="display:none">
+          <div class="kv"><span class="k">Номер</span><span id="licNumber"></span></div>
+          <div class="kv"><span class="k">Категория</span><span id="licCategory"></span></div>
+          <div class="kv"><span class="k">Действует до</span><span id="licExpire"></span></div>
+        </div>
+        <div class="kv">
+          <span class="k">Паспорт</span>
+          <span id="psStatus"></span>
+        </div>
+        <div id="psDetails" style="display:none">
+          <div class="kv"><span class="k">Серия и номер</span><span id="psNumber"></span></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Способы оплаты</h2>
+        <div class="sub">Привяжите карту, чтобы бронировать автомобили</div>
+        <div id="alert" class="alert" style="display:none"></div>
+        <div id="cardsList"></div>
+        <button class="btn btn-secondary" id="addCardBtn">+ Привязать карту</button>
+      </div>
+
+      <div class="section">
+        <h2>История поездок</h2>
+        <div class="sub">Завершённые поездки</div>
+        <div id="tripsList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="cardModal" style="display:none">
+    <div class="modal">
+      <h2>Привязка карты</h2>
+      <div class="sub">Данные карты передаются в платёжный шлюз. Деньги не списываются.</div>
+      <div id="cardAlert" class="alert" style="display:none"></div>
+      <form id="cardForm">
+        <div class="field">
+          <label>Номер карты</label>
+          <input name="number" placeholder="0000 0000 0000 0000" maxlength="19" inputmode="numeric" id="cardNumber">
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Срок (ММ/ГГ)</label>
+            <input name="expiry" placeholder="12/27" maxlength="5" id="cardExpiry">
+          </div>
+          <div class="field">
+            <label>CVC</label>
+            <input name="cvc" placeholder="123" maxlength="3" inputmode="numeric" type="password">
+          </div>
+        </div>
+        <div class="field">
+          <label>Владелец карты</label>
+          <input name="holder" placeholder="IVAN IVANOV">
+        </div>
+        <button type="submit" class="btn btn-primary">Привязать</button>
+        <div style="height:8px"></div>
+        <button type="button" class="btn btn-ghost" id="cardCancel">Отмена</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    let user;
+    const alertEl = document.getElementById('alert');
+
+    (async () => {
+      user = await requireAuth();
+      renderUser();
+      renderDocs();
+      renderCards();
+      renderTrips();
+    })();
+
+    function renderUser() {
+      document.getElementById('userName').textContent = user.fullName;
+      document.getElementById('userMeta').textContent = `${user.email} · ${user.phone}`;
+      const statusMap = {
+        active: '<span class="badge badge-ok">Активен</span>',
+        awaiting_license: '<span class="badge badge-warn">Ожидает ВУ</span>',
+        awaiting_passport: '<span class="badge badge-warn">Ожидает паспорт</span>'
+      };
+      document.getElementById('userStatus').innerHTML = statusMap[user.status] || user.status;
+    }
+
+    function renderDocs() {
+      const lic = user.license;
+      const licEl = document.getElementById('licStatus');
+      if (lic && lic.status === 'approved') {
+        licEl.innerHTML = '<span class="badge badge-ok">Подтверждено</span>';
+        document.getElementById('licDetails').style.display = 'block';
+        document.getElementById('licNumber').textContent = lic.number;
+        document.getElementById('licCategory').textContent = lic.category;
+        document.getElementById('licExpire').textContent = lic.expireDate;
+      } else if (lic) {
+        licEl.innerHTML = '<span class="badge badge-warn">На проверке</span>';
+      } else {
+        licEl.innerHTML = '<a href="/license.html">Загрузить</a>';
+      }
+
+      const ps = user.passport;
+      const psEl = document.getElementById('psStatus');
+      if (ps && ps.status === 'approved') {
+        psEl.innerHTML = '<span class="badge badge-ok">Подтверждён</span>';
+        document.getElementById('psDetails').style.display = 'block';
+        document.getElementById('psNumber').textContent = `${ps.series} ${ps.number}`;
+      } else {
+        psEl.innerHTML = '<a href="/passport.html">Загрузить</a>';
+      }
+    }
+
+    async function renderCards() {
+      const list = document.getElementById('cardsList');
+      list.innerHTML = '';
+      const { cards } = await api('/api/cards');
+      cards.forEach(c => {
+        const div = document.createElement('div');
+        div.className = 'card-tile';
+        div.innerHTML = `
+          <div>
+            <div class="brand">${c.brand}</div>
+            <div class="pan">${c.maskedPan}</div>
+            <div class="exp">до ${c.expiry}</div>
+          </div>
+          <button class="btn btn-ghost" data-id="${c.id}" style="width:auto">Удалить</button>
+        `;
+        div.querySelector('button').addEventListener('click', async (e) => {
+          if (!confirm('Удалить карту?')) return;
+          await api('/api/cards/' + e.target.dataset.id, { method: 'DELETE' });
+          renderCards();
+        });
+        list.appendChild(div);
+      });
+      if (cards.length === 0) {
+        list.innerHTML = '<div class="sub" style="margin-bottom:12px">Карт не привязано</div>';
+      }
+    }
+
+    async function renderTrips() {
+      const list = document.getElementById('tripsList');
+      const { trips } = await api('/api/trips');
+      if (trips.length === 0) {
+        list.innerHTML = '<div class="sub">Поездок пока нет</div>';
+        return;
+      }
+      list.innerHTML = '';
+      trips.forEach(t => {
+        const d = new Date(t.finishedAt);
+        const div = document.createElement('div');
+        div.className = 'kv';
+        div.innerHTML = `
+          <div>
+            <div>${t.car ? `${t.car.brand} ${t.car.model}` : 'Авто'}</div>
+            <div class="sub" style="margin:0">${d.toLocaleString('ru-RU')} · ${t.minutes} мин · ${t.distanceKm} км</div>
+          </div>
+          <div><b>${t.cost} ₽</b></div>
+        `;
+        list.appendChild(div);
+      });
+    }
+
+    document.getElementById('addCardBtn').addEventListener('click', () => {
+      document.getElementById('cardModal').style.display = 'flex';
+    });
+    document.getElementById('cardCancel').addEventListener('click', () => {
+      document.getElementById('cardModal').style.display = 'none';
+    });
+
+    document.getElementById('cardNumber').addEventListener('input', (e) => {
+      let v = e.target.value.replace(/\D/g, '').slice(0, 16);
+      e.target.value = v.replace(/(.{4})/g, '$1 ').trim();
+    });
+    document.getElementById('cardExpiry').addEventListener('input', (e) => {
+      let v = e.target.value.replace(/\D/g, '').slice(0, 4);
+      if (v.length >= 3) v = v.slice(0, 2) + '/' + v.slice(2);
+      e.target.value = v;
+    });
+
+    document.getElementById('cardForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const cardAlert = document.getElementById('cardAlert');
+      hideAlert(cardAlert);
+      try {
+        await api('/api/cards', { method: 'POST', body: Object.fromEntries(fd.entries()) });
+        document.getElementById('cardModal').style.display = 'none';
+        e.target.reset();
+        renderCards();
+      } catch (err) {
+        showError(cardAlert, err.message);
+      }
+    });
+
+    document.getElementById('logoutLink').addEventListener('click', async (e) => {
+      e.preventDefault();
+      await api('/api/logout', { method: 'POST' });
+      window.location.href = '/';
+    });
+  </script>
+</body>
+</html>

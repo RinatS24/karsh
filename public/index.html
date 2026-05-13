@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CarShare  — вход</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="center">
+    <div class="card">
+      <h1>CarShare</h1>
+      <div class="sub">Каршеринг будущего. Войдите, чтобы продолжить.</div>
+      <div id="alert" class="alert" style="display:none"></div>
+      <form id="loginForm">
+        <div class="field">
+          <label>E-mail</label>
+          <input type="email" name="email" required autocomplete="email" placeholder="ivanov@example.com">
+        </div>
+        <div class="field">
+          <label>Пароль</label>
+          <input type="password" name="password" required autocomplete="current-password" placeholder="••••••••">
+        </div>
+        <button type="submit" class="btn btn-primary" id="loginBtn">Войти</button>
+      </form>
+      <div class="center-link">
+        Нет аккаунта? <a href="/register.html">Зарегистрироваться</a>
+      </div>
+    </div>
+  </div>
+  <script src="/js/api.js"></script>
+  <script>
+    (async () => {
+      try {
+        const { user } = await api('/api/me');
+        if (user) window.location.href = '/map.html';
+      } catch (_) {}
+    })();
+
+    const form = document.getElementById('loginForm');
+    const alertEl = document.getElementById('alert');
+    const btn = document.getElementById('loginBtn');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideAlert(alertEl);
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+      try {
+        const fd = new FormData(form);
+        const res = await api('/api/login', {
+          method: 'POST',
+          body: { email: fd.get('email'), password: fd.get('password') }
+        });
+        if (res.user.status === 'awaiting_license') window.location.href = '/license.html';
+        else if (res.user.status === 'awaiting_passport') window.location.href = '/passport.html';
+        else window.location.href = '/map.html';
+      } catch (err) {
+        showError(alertEl, err.message);
+        btn.disabled = false; btn.textContent = 'Войти';
+      }
+    });
+  </script>
+</body>
+</html>
