@@ -39,7 +39,7 @@
           <div><b id="cpFuel"></b>топливо</div>
           <div><b id="cpDist"></b>до авто</div>
         </div>
-        <button class="btn btn-primary" id="bookBtn">Забронировать · депозит 150 ₽</button>
+        <button class="btn btn-primary" id="bookBtn">Забронировать · депозит 3000 ₽</button>
       </div>
 
       <div class="trip-widget" id="bookingWidget" style="display:none">
@@ -73,10 +73,10 @@
     </div>
   </div>
 
-    <!-- Модалка осмотра + фото перед поездкой -->
   <div class="modal-overlay" id="checklistModal" style="display:none">
     <div class="modal">
       <h2>Осмотр автомобиля</h2>
+<<<<<<< HEAD
       <div class="sub">Сфотографируйте авто со всех сторон и подтвердите осмотр.</div>
       <div id="startPhotoAlert" class="alert" style="display:none"></div>
 
@@ -101,6 +101,9 @@
       </div>
 
       <div style="font-size:13px;color:var(--text-dim);margin:14px 0 4px">Чек-лист</div>
+=======
+      <div class="sub">Перед началом поездки убедитесь, что у авто нет видимых повреждений.</div>
+>>>>>>> parent of 3cfc58b (final)
       <ul class="checklist">
         <li><input type="checkbox" id="ck1" checked><label for="ck1">Кузов без повреждений</label></li>
         <li><input type="checkbox" id="ck2" checked><label for="ck2">Стёкла и зеркала целые</label></li>
@@ -114,6 +117,7 @@
     </div>
   </div>
 
+<<<<<<< HEAD
   <div class="modal-overlay" id="endPhotosModal" style="display:none">
     <div class="modal">
       <h2>Финальный осмотр</h2>
@@ -146,6 +150,8 @@
     </div>
   </div>
 
+=======
+>>>>>>> parent of 3cfc58b (final)
   <div class="modal-overlay" id="receiptModal" style="display:none">
     <div class="modal">
       <h2>Поездка завершена</h2>
@@ -288,14 +294,14 @@
         }
       } finally {
         btn.disabled = false;
-        btn.innerHTML = 'Забронировать · депозит 150 ₽';
+        btn.innerHTML = 'Забронировать · депозит 3000 ₽';
       }
     });
 
     function showBookingWidget(booking, car) {
       document.getElementById('bookingWidget').style.display = 'block';
       document.getElementById('bwCar').textContent = `${car.brand} ${car.model} · ${car.plate}`;
-      document.getElementById('bwMeta').textContent = `Депозит ${car.deposit || 150} ₽ захолдирован. Подойдите к авто и нажмите «Открыть».`;
+      document.getElementById('bwMeta').textContent = `Депозит ${car.deposit || 3000} ₽ захолдирован. Подойдите к авто и нажмите «Открыть».`;
       if (bookingTimer) clearInterval(bookingTimer);
       const tick = () => {
         const ms = new Date(booking.expiresAt).getTime() - Date.now();
@@ -324,36 +330,6 @@
       loadCars();
     });
 
-        // ---------- Слоты для фотографий ----------
-    const photoSlots = {};
-    function bindPhotoSlot(slotKey) {
-      const zone = document.querySelector(`.upload-zone[data-slot="${slotKey}"]`);
-      if (!zone || zone.dataset.bound) return;
-      zone.dataset.bound = '1';
-      const input = zone.querySelector('input[type="file"]');
-      const labelText = zone.querySelector('.label').textContent;
-      zone.addEventListener('click', (e) => { if (e.target.tagName !== 'INPUT') input.click(); });
-      input.addEventListener('change', () => {
-        const f = input.files[0];
-        if (!f) return;
-        photoSlots[slotKey] = f;
-        const r = new FileReader();
-        r.onload = (ev) => {
-          zone.classList.add('has-file');
-          zone.innerHTML = `<img src="${ev.target.result}"><div class="label" style="margin-top:4px">${labelText}</div>`;
-        };
-        r.readAsDataURL(f);
-      });
-    }
-    ['start-front','start-back','start-left','start-right',
-     'end-front','end-back','end-left','end-right'].forEach(bindPhotoSlot);
-
-    function collectPhotos(prefix) {
-      return ['front','back','left','right']
-        .map(side => photoSlots[`${prefix}-${side}`])
-        .filter(Boolean);
-    }
-
     document.getElementById('openCarBtn').addEventListener('click', () => {
       document.getElementById('checklistModal').style.display = 'flex';
     });
@@ -361,13 +337,6 @@
       document.getElementById('checklistModal').style.display = 'none';
     });
     document.getElementById('ckStartBtn').addEventListener('click', async () => {
-      const alertEl = document.getElementById('startPhotoAlert');
-      hideAlert(alertEl);
-      const photos = collectPhotos('start');
-      if (photos.length < 4) {
-        showError(alertEl, 'Загрузите все 4 фото авто');
-        return;
-      }
       const btn = document.getElementById('ckStartBtn');
       btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Открываем авто...';
       try {
@@ -377,13 +346,10 @@
           interior: document.getElementById('ck3').checked,
           wheels: document.getElementById('ck4').checked
         };
-        const fd = new FormData();
-        fd.append('bookingId', activeBooking.id);
-        fd.append('lat', userPos.lat);
-        fd.append('lon', userPos.lon);
-        fd.append('checklist', JSON.stringify(checklist));
-        photos.forEach(p => fd.append('photos', p));
-        const res = await api('/api/trips/start', { method: 'POST', body: fd });
+        const res = await api('/api/trips/start', {
+          method: 'POST',
+          body: { bookingId: activeBooking.id, lat: userPos.lat, lon: userPos.lon, checklist }
+        });
         document.getElementById('checklistModal').style.display = 'none';
         document.getElementById('bookingWidget').style.display = 'none';
         if (bookingTimer) clearInterval(bookingTimer);
@@ -391,7 +357,7 @@
         activeTrip = res.trip;
         showTripWidget(res.trip, res.car);
       } catch (err) {
-        showError(alertEl, err.message);
+        alert(err.message);
       } finally {
         btn.disabled = false; btn.textContent = 'Начать поездку';
       }
@@ -413,32 +379,16 @@
       tripTimer = setInterval(tick, 1000);
     }
 
-    document.getElementById('finishBtn').addEventListener('click', () => {
+    document.getElementById('finishBtn').addEventListener('click', async () => {
       if (!activeTrip) return;
-      document.getElementById('endPhotosModal').style.display = 'flex';
-    });
-    document.getElementById('endCancelBtn').addEventListener('click', () => {
-      document.getElementById('endPhotosModal').style.display = 'none';
-    });
-    document.getElementById('endConfirmBtn').addEventListener('click', async () => {
-      const alertEl = document.getElementById('endPhotoAlert');
-      hideAlert(alertEl);
-      const photos = collectPhotos('end');
-      if (photos.length < 4) {
-        showError(alertEl, 'Загрузите все 4 фото авто');
-        return;
-      }
-      const btn = document.getElementById('endConfirmBtn');
+      const btn = document.getElementById('finishBtn');
       btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Завершаем...';
       try {
-        const fd = new FormData();
-        fd.append('lat', userPos.lat);
-        fd.append('lon', userPos.lon);
-        fd.append('distance', (Math.random() * 5 + 1).toFixed(1));
-        photos.forEach(p => fd.append('photos', p));
-        const res = await api(`/api/trips/${activeTrip.id}/finish`, { method: 'POST', body: fd });
+        const res = await api(`/api/trips/${activeTrip.id}/finish`, {
+          method: 'POST',
+          body: { lat: userPos.lat, lon: userPos.lon, distance: +(Math.random() * 5 + 1).toFixed(1) }
+        });
         if (tripTimer) clearInterval(tripTimer);
-        document.getElementById('endPhotosModal').style.display = 'none';
         document.getElementById('tripWidget').style.display = 'none';
         const min = res.trip.minutes;
         document.getElementById('rcTime').textContent = `${Math.floor(min / 60)} ч ${min % 60} мин`;
@@ -448,9 +398,9 @@
         document.getElementById('receiptModal').style.display = 'flex';
         activeTrip = null;
       } catch (err) {
-        showError(alertEl, err.message);
+        alert(err.message);
       } finally {
-        btn.disabled = false; btn.textContent = 'Завершить и оплатить';
+        btn.disabled = false; btn.textContent = 'Завершить поездку';
       }
     });
 

@@ -67,7 +67,7 @@ function seedCarsIfEmpty() {
       lon: center.lon + (Math.random() - 0.5) * 0.06,
       fuel: 40 + Math.floor(Math.random() * 60),
       ratePerMin: m.rate,
-      deposit: 150,
+      deposit: 3000,
       status: 'available',
       photo: m.photo
     });
@@ -413,7 +413,7 @@ app.get('/api/cars', auth, (req, res) => {
           lon: lon + Math.sin(angle) * r / Math.cos(lat * Math.PI / 180),
           fuel: 40 + Math.floor(Math.random() * 60),
           ratePerMin: m.rate,
-          deposit: 150,
+          deposit: 3000,
           status: 'available',
           photo: null
         });
@@ -533,17 +533,9 @@ app.delete('/api/bookings/:id', auth, (req, res) => {
 });
 
 // ---------- API: Поездка ----------
-app.post('/api/trips/start', auth, upload.array('photos', 8), (req, res) => {
+app.post('/api/trips/start', auth, (req, res) => {
   const db = loadDB();
-  const bookingId = req.body.bookingId;
-  const lat = parseFloat(req.body.lat);
-  const lon = parseFloat(req.body.lon);
-  let checklist = {};
-  try { checklist = req.body.checklist ? JSON.parse(req.body.checklist) : {}; } catch (_) {}
-  const photos = (req.files || []).map(f => '/uploads/' + path.basename(f.path));
-  if (photos.length < 4) {
-    return res.status(400).json({ error: 'Нужно загрузить минимум 4 фото авто (со всех сторон)' });
-  }
+  const { bookingId, lat, lon, checklist } = req.body || {};
   const booking = db.bookings.find(b => b.id === bookingId && b.userId === req.userId);
   if (!booking || booking.status !== 'active') return res.status(404).json({ error: 'Бронь не найдена' });
   const car = db.cars.find(c => c.id === booking.carId);
@@ -560,8 +552,7 @@ app.post('/api/trips/start', auth, upload.array('photos', 8), (req, res) => {
     carId: car.id,
     startedAt: new Date().toISOString(),
     ratePerMin: car.ratePerMin,
-    checklist,
-    startPhotos: photos,
+    checklist: checklist || {},
     status: 'active'
   };
   booking.status = 'in_trip';
@@ -579,18 +570,11 @@ app.get('/api/trips/active', auth, (req, res) => {
   res.json({ trip, car });
 });
 
-app.post('/api/trips/:id/finish', auth, upload.array('photos', 8), (req, res) => {
+app.post('/api/trips/:id/finish', auth, (req, res) => {
   const db = loadDB();
   const trip = db.trips.find(t => t.id === req.params.id && t.userId === req.userId);
   if (!trip || trip.status !== 'active') return res.status(404).json({ error: 'Поездка не найдена' });
-  const lat = parseFloat(req.body.lat);
-  const lon = parseFloat(req.body.lon);
-  const distance = parseFloat(req.body.distance);
-  const endPhotos = (req.files || []).map(f => '/uploads/' + path.basename(f.path));
-  if (endPhotos.length < 4) {
-    return res.status(400).json({ error: 'Нужно загрузить минимум 4 фото авто перед завершением' });
-  }
-  trip.endPhotos = endPhotos;
+  const { lat, lon, distance } = req.body || {};
   const car = db.cars.find(c => c.id === trip.carId);
   const finishedAt = new Date();
   const startedAt = new Date(trip.startedAt);
