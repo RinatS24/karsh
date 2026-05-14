@@ -105,7 +105,14 @@ function auth(req, res, next) {
   if (!token || !db.sessions[token]) {
     return res.status(401).json({ error: 'unauthorized' });
   }
-  req.userId = db.sessions[token];
+  const userId = db.sessions[token];
+  const user = db.users.find(u => u.id === userId);
+  if (user && user.blocked) {
+    delete db.sessions[token];
+    saveDB(db);
+    return res.status(403).json({ error: 'Аккаунт заблокирован администратором' });
+  }
+  req.userId = userId;
   req.db = db;
   next();
 }
@@ -231,6 +238,9 @@ app.post('/api/login', (req, res) => {
   const user = db.users.find(u => u.email === email);
   if (!user || !bcrypt.compareSync(password || '', user.passwordHash)) {
     return res.status(401).json({ error: 'Неверный e-mail или пароль' });
+  }
+  if (user.blocked) {
+    return res.status(403).json({ error: 'Аккаунт заблокирован администратором' });
   }
   const token = crypto.randomBytes(24).toString('hex');
   db.sessions[token] = user.id;
@@ -616,6 +626,216 @@ app.get('/api/trips', auth, (req, res) => {
     });
   res.json({ trips });
 });
+
+// ==================== АДМИНКА ====================
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@carshare.local';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+
+function adminAuth(req, res, next) {
+  const token = req.cookies.aid;
+  const db = loadDB();
+  if (!db.adminSessions) db.adminSessions = {};
+  if (!token || !db.adminSessions[token]) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  req.db = db;
+  next();
+}
+
+app.post('/api/admin/login', (req, res) => {
+  const { email, password } = req.body || {};
+  if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Неверный логин или пароль' });
+  }
+  const db = loadDB();
+  if (!db.adminSessions) db.adminSessions = {};
+  const token = crypto.randomBytes(24).toString('hex');
+  db.adminSessions[token] = true;
+  saveDB(db);
+  res.cookie('aid', token, { httpOnly: true, sameSite: 'lax' });
+  res.json({ ok: true, admin: { email: ADMIN_EMAIL } });
+});
+
+app.post('/api/admin/logout', (req, res) => {
+  const token = req.cookies.aid;
+  if (token) {
+    const db = loadDB();
+    if (db.adminSessions) delete db.adminSessions[token];
+    saveDB(db);
+  }
+  res.clearCookie('aid');
+  res.json({ ok: true });
+});
+
+app.get('/api/admin/me', adminAuth, (req, res) => {
+  res.json({ admin: { email: ADMIN_EMAIL } });
+});
+
+app.get('/api/admin/stats', adminAuth, (req, res) => {
+  const db = req.db;
+  const totalUsers = db.users.length;
+  const blockedUsers = db.users.filter(u => u.blocked).length;
+  const activeUsers = db.users.filter(u => u.status === 'active' && !u.blocked).length;
+  const totalCars = db.cars.length;
+  const availableCars = db.cars.filter(c => c.status === 'available').length;
+  const inTripCars = db.cars.filter(c => c.status === 'in_trip').length;
+  const bookedCars = db.cars.filter(c => c.status === 'booked').length;
+  const activeBookings = db.bookings.filter(b => b.status === 'active').length;
+  const finishedTrips = db.trips.filter(t => t.status === 'finished');
+  const activeTrips = db.trips.filter(t => t.status === 'active').length;
+  const totalRevenue = finishedTrips.reduce((sum, t) => sum + (t.cost || 0), 0);
+  const avgTripCost = finishedTrips.length > 0 ? Math.round(totalRevenue / finishedTrips.length) : 0;
+  res.json({
+    stats: {
+      totalUsers, blockedUsers, activeUsers,
+      totalCars, availableCars, inTripCars, bookedCars,
+      activeBookings, activeTrips,
+      totalTrips: finishedTrips.length,
+      totalRevenue, avgTripCost
+    }
+  });
+});
+
+app.get('/api/admin/users', adminAuth, (req, res) => {
+  const db = req.db;
+  const users = db.users.map(u => ({
+    id: u.id,
+    fullName: u.fullName,
+    email: u.email,
+    phone: u.phone,
+    status: u.status,
+    blocked: !!u.blocked,
+    createdAt: u.createdAt,
+    license: db.licenses[u.id] ? { number: db.licenses[u.id].number, status: db.licenses[u.id].status, expireDate: db.licenses[u.id].expireDate } : null,
+    passport: db.passports[u.id] ? { series: db.passports[u.id].series, number: db.passports[u.id].number } : null,
+    cardsCount: (db.cards[u.id] || []).length,
+    tripsCount: db.trips.filter(t => t.userId === u.id && t.status === 'finished').length,
+    totalSpent: db.trips.filter(t => t.userId === u.id && t.status === 'finished').reduce((s, t) => s + (t.cost || 0), 0)
+  }));
+  res.json({ users });
+});
+
+app.post('/api/admin/users/:id/block', adminAuth, (req, res) => {
+  const db = loadDB();
+  const user = db.users.find(u => u.id === req.params.id);
+  if (!user) return res.status(404).json({ error: 'not found' });
+  user.blocked = true;
+  for (const tok of Object.keys(db.sessions)) {
+    if (db.sessions[tok] === user.id) delete db.sessions[tok];
+  }
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/users/:id/unblock', adminAuth, (req, res) => {
+  const db = loadDB();
+  const user = db.users.find(u => u.id === req.params.id);
+  if (!user) return res.status(404).json({ error: 'not found' });
+  user.blocked = false;
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+app.delete('/api/admin/users/:id', adminAuth, (req, res) => {
+  const db = loadDB();
+  const idx = db.users.findIndex(u => u.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'not found' });
+  db.users.splice(idx, 1);
+  delete db.licenses[req.params.id];
+  delete db.passports[req.params.id];
+  delete db.cards[req.params.id];
+  for (const tok of Object.keys(db.sessions)) {
+    if (db.sessions[tok] === req.params.id) delete db.sessions[tok];
+  }
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+app.get('/api/admin/cars', adminAuth, (req, res) => {
+  res.json({ cars: req.db.cars });
+});
+
+app.post('/api/admin/cars', adminAuth, (req, res) => {
+  const db = loadDB();
+  const { brand, model, plate, lat, lon, fuel, ratePerMin, photo } = req.body || {};
+  if (!brand || !model || !plate) {
+    return res.status(400).json({ error: 'Бренд, модель и гос. номер обязательны' });
+  }
+  const car = {
+    id: crypto.randomUUID(),
+    brand, model, plate,
+    lat: parseFloat(lat) || 55.7558,
+    lon: parseFloat(lon) || 37.6173,
+    fuel: parseInt(fuel) || 100,
+    ratePerMin: parseInt(ratePerMin) || 8,
+    deposit: 150,
+    status: 'available',
+    photo: photo || null
+  };
+  db.cars.push(car);
+  saveDB(db);
+  res.json({ ok: true, car });
+});
+
+app.put('/api/admin/cars/:id', adminAuth, (req, res) => {
+  const db = loadDB();
+  const car = db.cars.find(c => c.id === req.params.id);
+  if (!car) return res.status(404).json({ error: 'not found' });
+  const { brand, model, plate, lat, lon, fuel, ratePerMin, status, photo } = req.body || {};
+  if (brand !== undefined) car.brand = brand;
+  if (model !== undefined) car.model = model;
+  if (plate !== undefined) car.plate = plate;
+  if (lat !== undefined && lat !== '') car.lat = parseFloat(lat);
+  if (lon !== undefined && lon !== '') car.lon = parseFloat(lon);
+  if (fuel !== undefined && fuel !== '') car.fuel = parseInt(fuel);
+  if (ratePerMin !== undefined && ratePerMin !== '') car.ratePerMin = parseInt(ratePerMin);
+  if (status !== undefined) car.status = status;
+  if (photo !== undefined) car.photo = photo;
+  saveDB(db);
+  res.json({ ok: true, car });
+});
+
+app.delete('/api/admin/cars/:id', adminAuth, (req, res) => {
+  const db = loadDB();
+  const idx = db.cars.findIndex(c => c.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'not found' });
+  db.cars.splice(idx, 1);
+  saveDB(db);
+  res.json({ ok: true });
+});
+
+app.get('/api/admin/trips', adminAuth, (req, res) => {
+  const trips = req.db.trips
+    .slice()
+    .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))
+    .map(t => {
+      const user = req.db.users.find(u => u.id === t.userId);
+      const car = req.db.cars.find(c => c.id === t.carId);
+      return {
+        ...t,
+        user: user ? { fullName: user.fullName, email: user.email } : null,
+        car: car ? { brand: car.brand, model: car.model, plate: car.plate } : null
+      };
+    });
+  res.json({ trips });
+});
+
+app.get('/api/admin/bookings', adminAuth, (req, res) => {
+  const bookings = req.db.bookings
+    .slice()
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .map(b => {
+      const user = req.db.users.find(u => u.id === b.userId);
+      const car = req.db.cars.find(c => c.id === b.carId);
+      return {
+        ...b,
+        user: user ? { fullName: user.fullName, email: user.email } : null,
+        car: car ? { brand: car.brand, model: car.model, plate: car.plate } : null
+      };
+    });
+  res.json({ bookings });
+});
+
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
