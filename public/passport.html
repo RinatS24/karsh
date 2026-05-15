@@ -16,7 +16,7 @@
     <div class="container">
       <div class="section">
         <h2>Паспорт</h2>
-        <div class="sub">Шаг 3 из 3. Сфотографируйте разворот с фото — система автоматически распознает данные.</div>
+        <div class="sub">Шаг 3 из 3. Загрузите фото разворота паспорта с вашей фотографией. После отправки документ уйдёт на проверку.</div>
         <div id="alert" class="alert" style="display:none"></div>
 
         <div id="uploadStep">
@@ -26,18 +26,19 @@
             <div class="label">Загрузить фото разворота паспорта</div>
           </div>
           <div style="height:12px"></div>
-          <button class="btn btn-primary" id="uploadBtn" disabled>Распознать данные</button>
+          <button class="btn btn-primary" id="uploadBtn" disabled style="padding:16px 20px;font-size:16px">Отправить на проверку</button>
         </div>
 
-        <div id="ocrStep" style="display:none">
-          <div class="alert alert-info">✓ Данные распознаны</div>
-          <div class="row">
-            <div class="field"><label>Серия</label><input id="series" disabled></div>
-            <div class="field"><label>Номер</label><input id="number" disabled></div>
+        <div id="doneStep" style="display:none">
+          <div class="alert alert-ok">
+            ✓ Документ отправлен на модерацию
           </div>
-          <div class="field"><label>ФИО</label><input id="fullName" disabled></div>
-          <div class="field"><label>Дата рождения</label><input id="birthDate" disabled></div>
-          <button class="btn btn-primary" id="finishBtn">Завершить и перейти к авто</button>
+          <div style="color:var(--text-dim);font-size:14px;line-height:1.6;margin-bottom:20px">
+            Ваш паспорт получен и будет проверен администратором в течение 24 часов. После подтверждения вам откроется доступ к автомобилям.
+          </div>
+          <div class="alert alert-info" style="margin-bottom:0">
+            ⏳ Ожидайте проверки. Вы получите уведомление на e-mail.
+          </div>
         </div>
       </div>
     </div>
@@ -71,26 +72,17 @@
     document.getElementById('uploadBtn').addEventListener('click', async () => {
       hideAlert(alertEl);
       const btn = document.getElementById('uploadBtn');
-      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Распознаём...';
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Отправляем...';
       try {
         const fd = new FormData();
         fd.append('photo', file);
-        const res = await api('/api/passport/upload', { method: 'POST', body: fd });
-        await new Promise(r => setTimeout(r, 1200));
-        document.getElementById('series').value = res.passport.series;
-        document.getElementById('number').value = res.passport.number;
-        document.getElementById('fullName').value = res.passport.fullName;
-        document.getElementById('birthDate').value = res.passport.birthDate;
+        await api('/api/passport/upload', { method: 'POST', body: fd });
         document.getElementById('uploadStep').style.display = 'none';
-        document.getElementById('ocrStep').style.display = 'block';
+        document.getElementById('doneStep').style.display = 'block';
       } catch (err) {
         showError(alertEl, err.message);
-        btn.disabled = false; btn.textContent = 'Распознать данные';
+        btn.disabled = false; btn.textContent = 'Отправить на проверку';
       }
-    });
-
-    document.getElementById('finishBtn').addEventListener('click', () => {
-      window.location.href = '/map.html';
     });
 
     document.getElementById('logoutLink').addEventListener('click', async (e) => {

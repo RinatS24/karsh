@@ -10,15 +10,13 @@
   <div class="page">
     <header class="app-header">
       <div class="logo">Car<span>Share</span></div>
-      <div class="nav">
-        <a href="#" id="logoutLink">Выйти</a>
-      </div>
+      <div class="nav"><a href="#" id="logoutLink">Выйти</a></div>
     </header>
 
     <div class="container">
       <div class="section">
         <h2>Водительское удостоверение</h2>
-        <div class="sub">Шаг 2 из 3. Сфотографируйте обе стороны ВУ. Система распознает данные автоматически.</div>
+        <div class="sub">Шаг 2 из 3. Загрузите фото обеих сторон ВУ. После отправки документ уйдёт на проверку — обычно занимает до 24 часов.</div>
         <div id="alert" class="alert" style="display:none"></div>
 
         <div id="uploadStep">
@@ -38,36 +36,17 @@
               </div>
             </div>
           </div>
-          <button class="btn btn-primary" id="uploadBtn" disabled>Распознать данные</button>
+          <button class="btn btn-primary" id="uploadBtn" disabled style="padding:16px 20px;font-size:16px">Отправить на проверку</button>
         </div>
 
-        <div id="ocrStep" style="display:none">
-          <div class="alert alert-info">
-            ✓ Данные распознаны. Проверьте корректность и подтвердите.
+        <div id="doneStep" style="display:none">
+          <div class="alert alert-ok">
+            ✓ Документ отправлен на модерацию
           </div>
-          <div class="field">
-            <label>Номер ВУ</label>
-            <input id="ocrNumber">
+          <div style="color:var(--text-dim);font-size:14px;line-height:1.6;margin-bottom:20px">
+            Ваше ВУ получено и будет проверено администратором в течение 24 часов. Мы уведомим вас по e-mail о результате.
           </div>
-          <div class="field">
-            <label>ФИО</label>
-            <input id="ocrFullName">
-          </div>
-          <div class="row">
-            <div class="field">
-              <label>Категория</label>
-              <input id="ocrCategory">
-            </div>
-            <div class="field">
-              <label>Дата выдачи</label>
-              <input id="ocrIssue" placeholder="ДД.ММ.ГГГГ">
-            </div>
-            <div class="field">
-              <label>Действует до</label>
-              <input id="ocrExpire" placeholder="ДД.ММ.ГГГГ">
-            </div>
-          </div>
-          <button class="btn btn-primary" id="confirmBtn">Подтвердить и продолжить</button>
+          <button class="btn btn-primary" id="nextBtn" style="padding:16px 20px;font-size:16px">Перейти к паспорту →</button>
         </div>
       </div>
     </div>
@@ -111,46 +90,22 @@
     document.getElementById('uploadBtn').addEventListener('click', async () => {
       hideAlert(alertEl);
       const btn = document.getElementById('uploadBtn');
-      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Распознаём...';
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Отправляем...';
       try {
         const fd = new FormData();
         fd.append('front', frontFile);
         fd.append('back', backFile);
-        const res = await api('/api/license/upload', { method: 'POST', body: fd });
-        document.getElementById('ocrNumber').value = res.ocr.number;
-        document.getElementById('ocrFullName').value = res.ocr.fullName;
-        document.getElementById('ocrCategory').value = res.ocr.category;
-        document.getElementById('ocrIssue').value = res.ocr.issueDate;
-        document.getElementById('ocrExpire').value = res.ocr.expireDate;
+        await api('/api/license/upload', { method: 'POST', body: fd });
         document.getElementById('uploadStep').style.display = 'none';
-        document.getElementById('ocrStep').style.display = 'block';
+        document.getElementById('doneStep').style.display = 'block';
       } catch (err) {
         showError(alertEl, err.message);
-        btn.disabled = false; btn.textContent = 'Распознать данные';
+        btn.disabled = false; btn.textContent = 'Отправить на проверку';
       }
     });
 
-    document.getElementById('confirmBtn').addEventListener('click', async () => {
-      hideAlert(alertEl);
-      const btn = document.getElementById('confirmBtn');
-      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Проверяем...';
-      try {
-        await new Promise(r => setTimeout(r, 1500));
-        await api('/api/license/confirm', {
-          method: 'POST',
-          body: {
-            number: document.getElementById('ocrNumber').value,
-            fullName: document.getElementById('ocrFullName').value,
-            category: document.getElementById('ocrCategory').value,
-            issueDate: document.getElementById('ocrIssue').value,
-            expireDate: document.getElementById('ocrExpire').value
-          }
-        });
-        window.location.href = '/passport.html';
-      } catch (err) {
-        showError(alertEl, err.message);
-        btn.disabled = false; btn.textContent = 'Подтвердить и продолжить';
-      }
+    document.getElementById('nextBtn').addEventListener('click', () => {
+      window.location.href = '/passport.html';
     });
 
     document.getElementById('logoutLink').addEventListener('click', async (e) => {
