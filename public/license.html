@@ -5,24 +5,57 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Водительское удостоверение — CarShare</title>
   <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .info-box {
+      background: rgba(96,165,250,.10);
+      border: 1px solid rgba(96,165,250,.3);
+      border-radius: 12px;
+      padding: 16px 18px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      line-height: 1.65;
+      color: #cdd9e5;
+    }
+    .info-box b { color: var(--text); }
+    .info-box ul { margin: 8px 0 0; padding-left: 20px; }
+    .info-box li { margin-bottom: 4px; }
+    .btn-xl { padding: 18px 24px; font-size: 17px; font-weight: 700; border-radius: 12px; }
+    .upload-zone { padding: 28px 16px; }
+    .upload-zone .icon { font-size: 38px; }
+    .upload-zone .label { font-size: 15px; margin-top: 6px; }
+    @media (max-width: 540px) {
+      .row { flex-direction: column; }
+    }
+  </style>
 </head>
 <body>
   <div class="page">
     <header class="app-header">
       <div class="logo">Car<span>Share</span></div>
-      <div class="nav">
-        <a href="#" id="logoutLink">Выйти</a>
-      </div>
+      <div class="nav"><a href="#" id="logoutLink">Выйти</a></div>
     </header>
 
     <div class="container">
       <div class="section">
         <h2>Водительское удостоверение</h2>
-        <div class="sub">Шаг 2 из 3. Сфотографируйте обе стороны ВУ. Система распознает данные автоматически.</div>
+        <div class="sub">Шаг 2 из 3</div>
         <div id="alert" class="alert" style="display:none"></div>
 
+        <div class="info-box">
+          📋 <b>Зачем это нужно?</b><br>
+          Для аренды автомобиля нам нужно убедиться, что у вас есть действующее
+          водительское удостоверение категории «B». Загруженные фото проверит
+          администратор сервиса — обычно это занимает до 24 часов. Пока документ
+          на проверке, бронирование авто будет недоступно.
+          <ul>
+            <li>Снимайте при хорошем освещении, без бликов</li>
+            <li>Все данные на фото должны читаться</li>
+            <li>Нужны обе стороны пластиковой карточки ВУ</li>
+          </ul>
+        </div>
+
         <div id="uploadStep">
-          <div class="row" style="margin-bottom:16px">
+          <div class="row" style="margin-bottom:18px">
             <div>
               <div class="upload-zone" id="frontZone">
                 <input type="file" accept="image/*" id="frontInput" style="display:none">
@@ -38,36 +71,18 @@
               </div>
             </div>
           </div>
-          <button class="btn btn-primary" id="uploadBtn" disabled>Распознать данные</button>
+          <button class="btn btn-primary btn-xl" id="uploadBtn" disabled style="width:100%">
+            Отправить на проверку
+          </button>
         </div>
 
-        <div id="ocrStep" style="display:none">
-          <div class="alert alert-info">
-            ✓ Данные распознаны. Проверьте корректность и подтвердите.
+        <div id="doneStep" style="display:none">
+          <div class="alert alert-ok">✓ Документ отправлен на модерацию</div>
+          <div class="info-box">
+            Ваше ВУ получено и будет проверено администратором в течение 24 часов.
+            Мы уведомим вас по e-mail о результате. Следующий шаг — загрузка паспорта.
           </div>
-          <div class="field">
-            <label>Номер ВУ</label>
-            <input id="ocrNumber">
-          </div>
-          <div class="field">
-            <label>ФИО</label>
-            <input id="ocrFullName">
-          </div>
-          <div class="row">
-            <div class="field">
-              <label>Категория</label>
-              <input id="ocrCategory">
-            </div>
-            <div class="field">
-              <label>Дата выдачи</label>
-              <input id="ocrIssue" placeholder="ДД.ММ.ГГГГ">
-            </div>
-            <div class="field">
-              <label>Действует до</label>
-              <input id="ocrExpire" placeholder="ДД.ММ.ГГГГ">
-            </div>
-          </div>
-          <button class="btn btn-primary" id="confirmBtn">Подтвердить и продолжить</button>
+          <button class="btn btn-primary btn-xl" id="nextBtn" style="width:100%">Перейти к паспорту →</button>
         </div>
       </div>
     </div>
@@ -96,7 +111,7 @@
         const reader = new FileReader();
         reader.onload = (e) => {
           zone.classList.add('has-file');
-          zone.innerHTML = `<img src="${e.target.result}"><div class="label" style="margin-top:8px">${file.name}</div>`;
+          zone.innerHTML = `<img src="${e.target.result}" style="max-width:100%;max-height:160px;border-radius:8px"><div class="label" style="margin-top:8px">${file.name}</div>`;
         };
         reader.readAsDataURL(file);
       });
@@ -111,46 +126,22 @@
     document.getElementById('uploadBtn').addEventListener('click', async () => {
       hideAlert(alertEl);
       const btn = document.getElementById('uploadBtn');
-      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Распознаём...';
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Отправляем...';
       try {
         const fd = new FormData();
         fd.append('front', frontFile);
         fd.append('back', backFile);
-        const res = await api('/api/license/upload', { method: 'POST', body: fd });
-        document.getElementById('ocrNumber').value = res.ocr.number;
-        document.getElementById('ocrFullName').value = res.ocr.fullName;
-        document.getElementById('ocrCategory').value = res.ocr.category;
-        document.getElementById('ocrIssue').value = res.ocr.issueDate;
-        document.getElementById('ocrExpire').value = res.ocr.expireDate;
+        await api('/api/license/upload', { method: 'POST', body: fd });
         document.getElementById('uploadStep').style.display = 'none';
-        document.getElementById('ocrStep').style.display = 'block';
+        document.getElementById('doneStep').style.display = 'block';
       } catch (err) {
         showError(alertEl, err.message);
-        btn.disabled = false; btn.textContent = 'Распознать данные';
+        btn.disabled = false; btn.textContent = 'Отправить на проверку';
       }
     });
 
-    document.getElementById('confirmBtn').addEventListener('click', async () => {
-      hideAlert(alertEl);
-      const btn = document.getElementById('confirmBtn');
-      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Проверяем...';
-      try {
-        await new Promise(r => setTimeout(r, 1500));
-        await api('/api/license/confirm', {
-          method: 'POST',
-          body: {
-            number: document.getElementById('ocrNumber').value,
-            fullName: document.getElementById('ocrFullName').value,
-            category: document.getElementById('ocrCategory').value,
-            issueDate: document.getElementById('ocrIssue').value,
-            expireDate: document.getElementById('ocrExpire').value
-          }
-        });
-        window.location.href = '/passport.html';
-      } catch (err) {
-        showError(alertEl, err.message);
-        btn.disabled = false; btn.textContent = 'Подтвердить и продолжить';
-      }
+    document.getElementById('nextBtn').addEventListener('click', () => {
+      window.location.href = '/passport.html';
     });
 
     document.getElementById('logoutLink').addEventListener('click', async (e) => {

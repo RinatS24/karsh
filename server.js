@@ -16,29 +16,18 @@ const DB_FILE = path.join(DATA_DIR, 'db.json');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-// ---------- "База данных" в JSON-файле ----------
 function loadDB() {
   if (!fs.existsSync(DB_FILE)) {
     const empty = {
-      users: [],
-      pendingRegistrations: {},
-      licenses: {},
-      passports: {},
-      cards: {},
-      cars: [],
-      bookings: [],
-      trips: [],
-      sessions: {}
+      users: [], pendingRegistrations: {}, licenses: {}, passports: {},
+      cards: {}, cars: [], bookings: [], trips: [], sessions: {}
     };
     fs.writeFileSync(DB_FILE, JSON.stringify(empty, null, 2));
   }
   return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
 }
-function saveDB(db) {
-  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
-}
+function saveDB(db) { fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2)); }
 
-// Сидируем парк автомобилей при первом запуске
 function seedCarsIfEmpty() {
   const db = loadDB();
   if (db.cars.length > 0) return;
@@ -59,17 +48,11 @@ function seedCarsIfEmpty() {
   for (let i = 0; i < 12; i++) {
     const m = models[i % models.length];
     cars.push({
-      id: crypto.randomUUID(),
-      brand: m.brand,
-      model: m.model,
-      plate: generatePlate(),
+      id: crypto.randomUUID(), brand: m.brand, model: m.model, plate: generatePlate(),
       lat: center.lat + (Math.random() - 0.5) * 0.04,
       lon: center.lon + (Math.random() - 0.5) * 0.06,
       fuel: 40 + Math.floor(Math.random() * 60),
-      ratePerMin: m.rate,
-      deposit: 3000,
-      status: 'available',
-      photo: m.photo
+      ratePerMin: m.rate, deposit: 150, status: 'available', photo: m.photo
     });
   }
   db.cars = cars;
@@ -83,7 +66,6 @@ function generatePlate() {
   return `${L()}${D()}${D()}${D()}${L()}${L()}77`;
 }
 
-// ---------- Middleware ----------
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -102,9 +84,7 @@ const upload = multer({
 function auth(req, res, next) {
   const token = req.cookies.sid;
   const db = loadDB();
-  if (!token || !db.sessions[token]) {
-    return res.status(401).json({ error: 'unauthorized' });
-  }
+  if (!token || !db.sessions[token]) return res.status(401).json({ error: 'unauthorized' });
   const userId = db.sessions[token];
   const user = db.users.find(u => u.id === userId);
   if (user && user.blocked) {
@@ -117,57 +97,40 @@ function auth(req, res, next) {
   next();
 }
 
-// ---------- Утилиты ----------
-function genSmsCode() {
-  return Math.floor(1000 + Math.random() * 9000).toString();
-}
-function normalizePhone(p) {
-  return (p || '').replace(/\D/g, '');
+function genSmsCode() { return Math.floor(1000 + Math.random() * 9000).toString(); }
+function normalizePhone(p) { return (p || '').replace(/\D/g, ''); }
+function recomputeUserStatus(db, user) {
+  const lic = db.licenses[user.id];
+  const pass = db.passports[user.id];
+  if (!lic || lic.status !== 'approved') { user.status = 'awaiting_license'; return; }
+  if (!pass || pass.status !== 'approved') { user.status = 'awaiting_passport'; return; }
+  user.status = 'active';
 }
 function publicUser(u, db) {
   const license = db.licenses[u.id];
   const passport = db.passports[u.id];
   const cards = db.cards[u.id] || [];
   return {
-    id: u.id,
-    fullName: u.fullName,
-    email: u.email,
-    phone: u.phone,
-    status: u.status,
+    id: u.id, fullName: u.fullName, email: u.email, phone: u.phone, status: u.status,
     license: license ? { ...license, status: license.status } : null,
     passport: passport || null,
     cards: cards.map(c => ({ id: c.id, maskedPan: c.maskedPan, brand: c.brand, expiry: c.expiry }))
   };
 }
 
-// ---------- API: Регистрация ----------
 app.post('/api/register/start', (req, res) => {
   const db = loadDB();
   const { fullName, email, phone, password } = req.body || {};
-  if (!fullName || !email || !phone || !password) {
-    return res.status(400).json({ error: 'Все поля обязательны' });
-  }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return res.status(400).json({ error: 'Некорректный email' });
-  }
-  if (password.length < 6) {
-    return res.status(400).json({ error: 'Пароль должен быть не короче 6 символов' });
-  }
+  if (!fullName || !email || !phone || !password) return res.status(400).json({ error: 'Все поля обязательны' });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Некорректный email' });
+  if (password.length < 6) return res.status(400).json({ error: 'Пароль должен быть не короче 6 символов' });
   const phoneNorm = normalizePhone(phone);
-  if (phoneNorm.length < 10) {
-    return res.status(400).json({ error: 'Некорректный номер телефона' });
-  }
-  if (db.users.some(u => u.email === email)) {
-    return res.status(409).json({ error: 'E-mail уже зарегистрирован' });
-  }
-  if (db.users.some(u => normalizePhone(u.phone) === phoneNorm)) {
-    return res.status(409).json({ error: 'Телефон уже зарегистрирован' });
-  }
+  if (phoneNorm.length < 10) return res.status(400).json({ error: 'Некорректный номер телефона' });
+  if (db.users.some(u => u.email === email)) return res.status(409).json({ error: 'E-mail уже зарегистрирован' });
+  if (db.users.some(u => normalizePhone(u.phone) === phoneNorm)) return res.status(409).json({ error: 'Телефон уже зарегистрирован' });
   const code = genSmsCode();
   db.pendingRegistrations[phoneNorm] = {
-    code,
-    attempts: 0,
-    expiresAt: Date.now() + 2 * 60 * 1000,
+    code, attempts: 0, expiresAt: Date.now() + 2 * 60 * 1000,
     payload: { fullName, email, phone, passwordHash: bcrypt.hashSync(password, 8) }
   };
   saveDB(db);
@@ -180,9 +143,7 @@ app.post('/api/register/resend', (req, res) => {
   const phoneNorm = normalizePhone(req.body && req.body.phone);
   const pending = db.pendingRegistrations[phoneNorm];
   if (!pending) return res.status(404).json({ error: 'Заявка на регистрацию не найдена' });
-  if (pending.blockedUntil && pending.blockedUntil > Date.now()) {
-    return res.status(429).json({ error: 'Слишком много попыток. Попробуйте позже.' });
-  }
+  if (pending.blockedUntil && pending.blockedUntil > Date.now()) return res.status(429).json({ error: 'Слишком много попыток. Попробуйте позже.' });
   pending.code = genSmsCode();
   pending.attempts = 0;
   pending.expiresAt = Date.now() + 2 * 60 * 1000;
@@ -197,12 +158,8 @@ app.post('/api/register/verify', (req, res) => {
   const phoneNorm = normalizePhone(phone);
   const pending = db.pendingRegistrations[phoneNorm];
   if (!pending) return res.status(404).json({ error: 'Заявка не найдена' });
-  if (pending.blockedUntil && pending.blockedUntil > Date.now()) {
-    return res.status(429).json({ error: 'Повторная отправка заблокирована на 5 минут' });
-  }
-  if (Date.now() > pending.expiresAt) {
-    return res.status(410).json({ error: 'Срок действия кода истёк' });
-  }
+  if (pending.blockedUntil && pending.blockedUntil > Date.now()) return res.status(429).json({ error: 'Повторная отправка заблокирована на 5 минут' });
+  if (Date.now() > pending.expiresAt) return res.status(410).json({ error: 'Срок действия кода истёк' });
   if (String(code) !== pending.code) {
     pending.attempts = (pending.attempts || 0) + 1;
     if (pending.attempts >= 3) {
@@ -214,13 +171,9 @@ app.post('/api/register/verify', (req, res) => {
     return res.status(400).json({ error: 'Неверный код', attemptsLeft: 3 - pending.attempts });
   }
   const user = {
-    id: crypto.randomUUID(),
-    fullName: pending.payload.fullName,
-    email: pending.payload.email,
-    phone: pending.payload.phone,
-    passwordHash: pending.payload.passwordHash,
-    status: 'awaiting_license',
-    createdAt: new Date().toISOString()
+    id: crypto.randomUUID(), fullName: pending.payload.fullName, email: pending.payload.email,
+    phone: pending.payload.phone, passwordHash: pending.payload.passwordHash,
+    status: 'awaiting_license', createdAt: new Date().toISOString()
   };
   db.users.push(user);
   delete db.pendingRegistrations[phoneNorm];
@@ -231,17 +184,12 @@ app.post('/api/register/verify', (req, res) => {
   res.json({ ok: true, user: publicUser(user, db) });
 });
 
-// ---------- API: Логин/выход ----------
 app.post('/api/login', (req, res) => {
   const db = loadDB();
   const { email, password } = req.body || {};
   const user = db.users.find(u => u.email === email);
-  if (!user || !bcrypt.compareSync(password || '', user.passwordHash)) {
-    return res.status(401).json({ error: 'Неверный e-mail или пароль' });
-  }
-  if (user.blocked) {
-    return res.status(403).json({ error: 'Аккаунт заблокирован администратором' });
-  }
+  if (!user || !bcrypt.compareSync(password || '', user.passwordHash)) return res.status(401).json({ error: 'Неверный e-mail или пароль' });
+  if (user.blocked) return res.status(403).json({ error: 'Аккаунт заблокирован администратором' });
   const token = crypto.randomBytes(24).toString('hex');
   db.sessions[token] = user.id;
   saveDB(db);
@@ -251,11 +199,7 @@ app.post('/api/login', (req, res) => {
 
 app.post('/api/logout', (req, res) => {
   const token = req.cookies.sid;
-  if (token) {
-    const db = loadDB();
-    delete db.sessions[token];
-    saveDB(db);
-  }
+  if (token) { const db = loadDB(); delete db.sessions[token]; saveDB(db); }
   res.clearCookie('sid');
   res.json({ ok: true });
 });
@@ -266,10 +210,8 @@ app.get('/api/me', auth, (req, res) => {
   res.json({ user: publicUser(user, req.db) });
 });
 
-// ---------- API: ВУ ----------
 app.post('/api/license/upload', auth, upload.fields([
-  { name: 'front', maxCount: 1 },
-  { name: 'back', maxCount: 1 }
+  { name: 'front', maxCount: 1 }, { name: 'back', maxCount: 1 }
 ]), (req, res) => {
   const db = loadDB();
   const user = db.users.find(u => u.id === req.userId);
@@ -277,12 +219,10 @@ app.post('/api/license/upload', auth, upload.fields([
   const front = req.files && req.files.front && req.files.front[0];
   const back = req.files && req.files.back && req.files.back[0];
   if (!front || !back) return res.status(400).json({ error: 'Нужны обе стороны ВУ' });
-
   const issueYear = 2018 + Math.floor(Math.random() * 6);
   const ocr = {
     number: `${77 + Math.floor(Math.random() * 22)} ${String(Math.floor(Math.random() * 90 + 10))} ${String(Math.floor(Math.random() * 900000 + 100000))}`,
-    fullName: user.fullName,
-    category: 'B',
+    fullName: user.fullName, category: 'B',
     issueDate: `${String(1 + Math.floor(Math.random() * 28)).padStart(2, '0')}.${String(1 + Math.floor(Math.random() * 12)).padStart(2, '0')}.${issueYear}`,
     expireDate: `${String(1 + Math.floor(Math.random() * 28)).padStart(2, '0')}.${String(1 + Math.floor(Math.random() * 12)).padStart(2, '0')}.${issueYear + 10}`
   };
@@ -290,8 +230,7 @@ app.post('/api/license/upload', auth, upload.fields([
     ...ocr,
     frontPhoto: '/uploads/' + path.basename(front.path),
     backPhoto: '/uploads/' + path.basename(back.path),
-    status: 'pending_review',
-    uploadedAt: new Date().toISOString()
+    status: 'pending', submittedAt: new Date().toISOString(), uploadedAt: new Date().toISOString()
   };
   saveDB(db);
   res.json({ ok: true, ocr });
@@ -304,24 +243,10 @@ app.post('/api/license/confirm', auth, (req, res) => {
   if (!license) return res.status(404).json({ error: 'ВУ не загружено' });
   const { number, fullName, category, issueDate, expireDate } = req.body || {};
   Object.assign(license, { number, fullName, category, issueDate, expireDate });
-  const [d, m, y] = (expireDate || '').split('.').map(Number);
-  const exp = new Date(y, (m || 1) - 1, d || 1);
-  if (!isFinite(exp.getTime()) || exp < new Date()) {
-    license.status = 'rejected';
-    saveDB(db);
-    return res.status(400).json({ error: 'Срок действия ВУ истёк' });
-  }
-  license.status = 'approved';
-  if (!db.passports[user.id]) {
-    user.status = 'awaiting_passport';
-  } else {
-    user.status = 'active';
-  }
   saveDB(db);
   res.json({ ok: true, license });
 });
 
-// ---------- API: Паспорт ----------
 app.post('/api/passport/upload', auth, upload.single('photo'), (req, res) => {
   const db = loadDB();
   const user = db.users.find(u => u.id === req.userId);
@@ -329,26 +254,16 @@ app.post('/api/passport/upload', auth, upload.single('photo'), (req, res) => {
   const series = String(1000 + Math.floor(Math.random() * 9000));
   const number = String(100000 + Math.floor(Math.random() * 900000));
   db.passports[user.id] = {
-    series,
-    number,
-    fullName: user.fullName,
-    birthDate: '01.01.1995',
+    series, number, fullName: user.fullName, birthDate: '01.01.1995',
     photo: '/uploads/' + path.basename(req.file.path),
-    status: 'approved',
-    uploadedAt: new Date().toISOString()
+    status: 'pending', submittedAt: new Date().toISOString(), uploadedAt: new Date().toISOString()
   };
-  if (db.licenses[user.id] && db.licenses[user.id].status === 'approved') {
-    user.status = 'active';
-  }
   saveDB(db);
   res.json({ ok: true, passport: db.passports[user.id] });
 });
 
-// ---------- API: Карты ----------
 app.get('/api/cards', auth, (req, res) => {
-  const cards = (req.db.cards[req.userId] || []).map(c => ({
-    id: c.id, maskedPan: c.maskedPan, brand: c.brand, expiry: c.expiry
-  }));
+  const cards = (req.db.cards[req.userId] || []).map(c => ({ id: c.id, maskedPan: c.maskedPan, brand: c.brand, expiry: c.expiry }));
   res.json({ cards });
 });
 
@@ -360,13 +275,7 @@ app.post('/api/cards', auth, (req, res) => {
   if (!/^\d{2}\/\d{2}$/.test(expiry || '')) return res.status(400).json({ error: 'Срок: ММ/ГГ' });
   if (!/^\d{3}$/.test(cvc || '')) return res.status(400).json({ error: 'CVC: 3 цифры' });
   const brand = digits.startsWith('4') ? 'VISA' : digits.startsWith('5') ? 'MasterCard' : digits.startsWith('2') ? 'МИР' : 'Card';
-  const card = {
-    id: crypto.randomUUID(),
-    maskedPan: '•••• •••• •••• ' + digits.slice(-4),
-    brand,
-    expiry,
-    holder: holder || ''
-  };
+  const card = { id: crypto.randomUUID(), maskedPan: '•••• •••• •••• ' + digits.slice(-4), brand, expiry, holder: holder || '' };
   if (!db.cards[req.userId]) db.cards[req.userId] = [];
   db.cards[req.userId].push(card);
   saveDB(db);
@@ -381,7 +290,6 @@ app.delete('/api/cards/:id', auth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ---------- API: Автомобили / поиск ----------
 app.get('/api/cars', auth, (req, res) => {
   const db = loadDB();
   const lat = parseFloat(req.query.lat);
@@ -393,29 +301,20 @@ app.get('/api/cars', auth, (req, res) => {
     if (nearby.length === 0) {
       const newCars = [];
       const models = [
-        { brand: 'Kia', model: 'Rio', rate: 8 },
-        { brand: 'Hyundai', model: 'Solaris', rate: 8 },
-        { brand: 'Volkswagen', model: 'Polo', rate: 9 },
-        { brand: 'Skoda', model: 'Rapid', rate: 9 },
-        { brand: 'Toyota', model: 'Camry', rate: 14 },
-        { brand: 'BMW', model: '3 Series', rate: 18 }
+        { brand: 'Kia', model: 'Rio', rate: 8 }, { brand: 'Hyundai', model: 'Solaris', rate: 8 },
+        { brand: 'Volkswagen', model: 'Polo', rate: 9 }, { brand: 'Skoda', model: 'Rapid', rate: 9 },
+        { brand: 'Toyota', model: 'Camry', rate: 14 }, { brand: 'BMW', model: '3 Series', rate: 18 }
       ];
       for (let i = 0; i < 8; i++) {
         const m = models[i % models.length];
         const angle = Math.random() * 2 * Math.PI;
         const r = (Math.random() * 0.8 + 0.1) * (radius / 111);
         newCars.push({
-          id: crypto.randomUUID(),
-          brand: m.brand,
-          model: m.model,
-          plate: generatePlate(),
+          id: crypto.randomUUID(), brand: m.brand, model: m.model, plate: generatePlate(),
           lat: lat + Math.cos(angle) * r,
           lon: lon + Math.sin(angle) * r / Math.cos(lat * Math.PI / 180),
           fuel: 40 + Math.floor(Math.random() * 60),
-          ratePerMin: m.rate,
-          deposit: 3000,
-          status: 'available',
-          photo: null
+          ratePerMin: m.rate, deposit: 150, status: 'available', photo: null
         });
       }
       db.cars.push(...newCars);
@@ -426,8 +325,6 @@ app.get('/api/cars', auth, (req, res) => {
       .map(c => ({ ...c, distance: haversine(lat, lon, c.lat, c.lon) }))
       .filter(c => c.distance <= radius * 3)
       .sort((a, b) => a.distance - b.distance);
-
-    // Гарантируем, что одна машина всегда находится в радиусе 50 м (демо)
     const NEAR_KM = 0.05;
     const hasNear = cars.some(c => c.distance <= NEAR_KM);
     if (!hasNear && cars.length > 0) {
@@ -461,26 +358,18 @@ function haversine(lat1, lon1, lat2, lon2) {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) ** 2;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
-// ---------- API: Бронирование ----------
 app.post('/api/bookings', auth, (req, res) => {
   const db = loadDB();
   const user = db.users.find(u => u.id === req.userId);
-  if (user.status !== 'active') {
-    return res.status(403).json({ error: 'Аккаунт не активирован. Загрузите документы.' });
-  }
-  if (!db.cards[req.userId] || db.cards[req.userId].length === 0) {
-    return res.status(402).json({ error: 'no_card', message: 'Привяжите банковскую карту' });
-  }
+  if (user.status !== 'active') return res.status(403).json({ error: 'Аккаунт не активирован. Дождитесь проверки документов.' });
+  if (!db.cards[req.userId] || db.cards[req.userId].length === 0) return res.status(402).json({ error: 'no_card', message: 'Привяжите банковскую карту' });
   const car = db.cars.find(c => c.id === req.body.carId);
   if (!car) return res.status(404).json({ error: 'Авто не найдено' });
   if (car.status !== 'available') return res.status(409).json({ error: 'Авто уже забронировано' });
-
   const now = Date.now();
   for (const b of db.bookings) {
     if (b.status === 'active' && new Date(b.expiresAt).getTime() < now) {
@@ -489,15 +378,10 @@ app.post('/api/bookings', auth, (req, res) => {
       if (oc) oc.status = 'available';
     }
   }
-
   const booking = {
-    id: crypto.randomUUID(),
-    userId: req.userId,
-    carId: car.id,
-    cardId: db.cards[req.userId][0].id,
-    depositHoldId: crypto.randomBytes(6).toString('hex'),
-    createdAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    id: crypto.randomUUID(), userId: req.userId, carId: car.id,
+    cardId: db.cards[req.userId][0].id, depositHoldId: crypto.randomBytes(6).toString('hex'),
+    createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
     status: 'active'
   };
   db.bookings.push(booking);
@@ -532,28 +416,26 @@ app.delete('/api/bookings/:id', auth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ---------- API: Поездка ----------
-app.post('/api/trips/start', auth, (req, res) => {
+app.post('/api/trips/start', auth, upload.array('photos', 8), (req, res) => {
   const db = loadDB();
-  const { bookingId, lat, lon, checklist } = req.body || {};
+  const bookingId = req.body.bookingId;
+  const lat = parseFloat(req.body.lat);
+  const lon = parseFloat(req.body.lon);
+  let checklist = {};
+  try { checklist = req.body.checklist ? JSON.parse(req.body.checklist) : {}; } catch (_) {}
+  const photos = (req.files || []).map(f => '/uploads/' + path.basename(f.path));
+  if (photos.length < 4) return res.status(400).json({ error: 'Нужно загрузить минимум 4 фото авто (со всех сторон)' });
   const booking = db.bookings.find(b => b.id === bookingId && b.userId === req.userId);
   if (!booking || booking.status !== 'active') return res.status(404).json({ error: 'Бронь не найдена' });
   const car = db.cars.find(c => c.id === booking.carId);
   if (isFinite(lat) && isFinite(lon)) {
     const dist = haversine(lat, lon, car.lat, car.lon) * 1000;
-    if (dist > 50) {
-      return res.status(400).json({ error: `Вы слишком далеко от авто (${Math.round(dist)} м). Подойдите ближе 50 м.` });
-    }
+    if (dist > 50) return res.status(400).json({ error: `Вы слишком далеко от авто (${Math.round(dist)} м). Подойдите ближе 50 м.` });
   }
   const trip = {
-    id: crypto.randomUUID(),
-    bookingId: booking.id,
-    userId: req.userId,
-    carId: car.id,
-    startedAt: new Date().toISOString(),
-    ratePerMin: car.ratePerMin,
-    checklist: checklist || {},
-    status: 'active'
+    id: crypto.randomUUID(), bookingId: booking.id, userId: req.userId, carId: car.id,
+    startedAt: new Date().toISOString(), ratePerMin: car.ratePerMin,
+    checklist, startPhotos: photos, status: 'active'
   };
   booking.status = 'in_trip';
   car.status = 'in_trip';
@@ -570,11 +452,16 @@ app.get('/api/trips/active', auth, (req, res) => {
   res.json({ trip, car });
 });
 
-app.post('/api/trips/:id/finish', auth, (req, res) => {
+app.post('/api/trips/:id/finish', auth, upload.array('photos', 8), (req, res) => {
   const db = loadDB();
   const trip = db.trips.find(t => t.id === req.params.id && t.userId === req.userId);
   if (!trip || trip.status !== 'active') return res.status(404).json({ error: 'Поездка не найдена' });
-  const { lat, lon, distance } = req.body || {};
+  const lat = parseFloat(req.body.lat);
+  const lon = parseFloat(req.body.lon);
+  const distance = parseFloat(req.body.distance);
+  const endPhotos = (req.files || []).map(f => '/uploads/' + path.basename(f.path));
+  if (endPhotos.length < 4) return res.status(400).json({ error: 'Нужно загрузить минимум 4 фото авто перед завершением' });
+  trip.endPhotos = endPhotos;
   const car = db.cars.find(c => c.id === trip.carId);
   const finishedAt = new Date();
   const startedAt = new Date(trip.startedAt);
@@ -587,10 +474,7 @@ app.post('/api/trips/:id/finish', auth, (req, res) => {
   trip.status = 'finished';
   trip.paymentStatus = 'paid';
   if (car) {
-    if (isFinite(lat) && isFinite(lon)) {
-      car.lat = lat;
-      car.lon = lon;
-    }
+    if (isFinite(lat) && isFinite(lon)) { car.lat = lat; car.lon = lon; }
     car.status = 'available';
     car.fuel = Math.max(5, car.fuel - Math.ceil(trip.distanceKm * 2));
   }
@@ -619,18 +503,14 @@ function adminAuth(req, res, next) {
   const token = req.cookies.aid;
   const db = loadDB();
   if (!db.adminSessions) db.adminSessions = {};
-  if (!token || !db.adminSessions[token]) {
-    return res.status(401).json({ error: 'unauthorized' });
-  }
+  if (!token || !db.adminSessions[token]) return res.status(401).json({ error: 'unauthorized' });
   req.db = db;
   next();
 }
 
 app.post('/api/admin/login', (req, res) => {
   const { email, password } = req.body || {};
-  if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
-    return res.status(401).json({ error: 'Неверный логин или пароль' });
-  }
+  if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Неверный логин или пароль' });
   const db = loadDB();
   if (!db.adminSessions) db.adminSessions = {};
   const token = crypto.randomBytes(24).toString('hex');
@@ -642,40 +522,31 @@ app.post('/api/admin/login', (req, res) => {
 
 app.post('/api/admin/logout', (req, res) => {
   const token = req.cookies.aid;
-  if (token) {
-    const db = loadDB();
-    if (db.adminSessions) delete db.adminSessions[token];
-    saveDB(db);
-  }
+  if (token) { const db = loadDB(); if (db.adminSessions) delete db.adminSessions[token]; saveDB(db); }
   res.clearCookie('aid');
   res.json({ ok: true });
 });
 
-app.get('/api/admin/me', adminAuth, (req, res) => {
-  res.json({ admin: { email: ADMIN_EMAIL } });
-});
+app.get('/api/admin/me', adminAuth, (req, res) => { res.json({ admin: { email: ADMIN_EMAIL } }); });
 
 app.get('/api/admin/stats', adminAuth, (req, res) => {
   const db = req.db;
-  const totalUsers = db.users.length;
-  const blockedUsers = db.users.filter(u => u.blocked).length;
-  const activeUsers = db.users.filter(u => u.status === 'active' && !u.blocked).length;
-  const totalCars = db.cars.length;
-  const availableCars = db.cars.filter(c => c.status === 'available').length;
-  const inTripCars = db.cars.filter(c => c.status === 'in_trip').length;
-  const bookedCars = db.cars.filter(c => c.status === 'booked').length;
-  const activeBookings = db.bookings.filter(b => b.status === 'active').length;
   const finishedTrips = db.trips.filter(t => t.status === 'finished');
-  const activeTrips = db.trips.filter(t => t.status === 'active').length;
   const totalRevenue = finishedTrips.reduce((sum, t) => sum + (t.cost || 0), 0);
-  const avgTripCost = finishedTrips.length > 0 ? Math.round(totalRevenue / finishedTrips.length) : 0;
   res.json({
     stats: {
-      totalUsers, blockedUsers, activeUsers,
-      totalCars, availableCars, inTripCars, bookedCars,
-      activeBookings, activeTrips,
+      totalUsers: db.users.length,
+      blockedUsers: db.users.filter(u => u.blocked).length,
+      activeUsers: db.users.filter(u => u.status === 'active' && !u.blocked).length,
+      totalCars: db.cars.length,
+      availableCars: db.cars.filter(c => c.status === 'available').length,
+      inTripCars: db.cars.filter(c => c.status === 'in_trip').length,
+      bookedCars: db.cars.filter(c => c.status === 'booked').length,
+      activeBookings: db.bookings.filter(b => b.status === 'active').length,
+      activeTrips: db.trips.filter(t => t.status === 'active').length,
       totalTrips: finishedTrips.length,
-      totalRevenue, avgTripCost
+      totalRevenue,
+      avgTripCost: finishedTrips.length > 0 ? Math.round(totalRevenue / finishedTrips.length) : 0
     }
   });
 });
@@ -683,15 +554,10 @@ app.get('/api/admin/stats', adminAuth, (req, res) => {
 app.get('/api/admin/users', adminAuth, (req, res) => {
   const db = req.db;
   const users = db.users.map(u => ({
-    id: u.id,
-    fullName: u.fullName,
-    email: u.email,
-    phone: u.phone,
-    status: u.status,
-    blocked: !!u.blocked,
-    createdAt: u.createdAt,
-    license: db.licenses[u.id] ? { number: db.licenses[u.id].number, status: db.licenses[u.id].status, expireDate: db.licenses[u.id].expireDate } : null,
-    passport: db.passports[u.id] ? { series: db.passports[u.id].series, number: db.passports[u.id].number } : null,
+    id: u.id, fullName: u.fullName, email: u.email, phone: u.phone,
+    status: u.status, blocked: !!u.blocked, createdAt: u.createdAt,
+    license: db.licenses[u.id] ? { number: db.licenses[u.id].number, status: db.licenses[u.id].status, expireDate: db.licenses[u.id].expireDate, submittedAt: db.licenses[u.id].submittedAt } : null,
+    passport: db.passports[u.id] ? { series: db.passports[u.id].series, number: db.passports[u.id].number, status: db.passports[u.id].status, submittedAt: db.passports[u.id].submittedAt } : null,
     cardsCount: (db.cards[u.id] || []).length,
     tripsCount: db.trips.filter(t => t.userId === u.id && t.status === 'finished').length,
     totalSpent: db.trips.filter(t => t.userId === u.id && t.status === 'finished').reduce((s, t) => s + (t.cost || 0), 0)
@@ -699,14 +565,53 @@ app.get('/api/admin/users', adminAuth, (req, res) => {
   res.json({ users });
 });
 
+app.get('/api/admin/docs', adminAuth, (req, res) => {
+  const db = req.db;
+  const docs = [];
+  db.users.forEach(u => {
+    const lic = db.licenses[u.id];
+    if (lic) docs.push({ userId: u.id, userName: u.fullName, userEmail: u.email, type: 'license', status: lic.status || 'pending', submittedAt: lic.submittedAt || lic.uploadedAt || null, number: lic.number, frontPhoto: lic.frontPhoto, backPhoto: lic.backPhoto });
+    const pass = db.passports[u.id];
+    if (pass) docs.push({ userId: u.id, userName: u.fullName, userEmail: u.email, type: 'passport', status: pass.status || 'pending', submittedAt: pass.submittedAt || pass.uploadedAt || null, number: `${pass.series} ${pass.number}`, photo: pass.photo });
+  });
+  docs.sort((a, b) => (a.status === 'pending' ? -1 : 1) - (b.status === 'pending' ? -1 : 1));
+  res.json({ docs });
+});
+
+app.post('/api/admin/users/:userId/docs/:docType/approve', adminAuth, (req, res) => {
+  const db = loadDB();
+  const user = db.users.find(u => u.id === req.params.userId);
+  if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+  const store = req.params.docType === 'license' ? db.licenses : db.passports;
+  const doc = store[user.id];
+  if (!doc) return res.status(404).json({ error: 'Документ не найден' });
+  doc.status = 'approved';
+  doc.rejectReason = undefined;
+  recomputeUserStatus(db, user);
+  saveDB(db);
+  res.json({ ok: true, status: user.status });
+});
+
+app.post('/api/admin/users/:userId/docs/:docType/reject', adminAuth, (req, res) => {
+  const db = loadDB();
+  const user = db.users.find(u => u.id === req.params.userId);
+  if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+  const store = req.params.docType === 'license' ? db.licenses : db.passports;
+  const doc = store[user.id];
+  if (!doc) return res.status(404).json({ error: 'Документ не найден' });
+  doc.status = 'rejected';
+  doc.rejectReason = (req.body && req.body.reason) || '';
+  recomputeUserStatus(db, user);
+  saveDB(db);
+  res.json({ ok: true, status: user.status });
+});
+
 app.post('/api/admin/users/:id/block', adminAuth, (req, res) => {
   const db = loadDB();
   const user = db.users.find(u => u.id === req.params.id);
   if (!user) return res.status(404).json({ error: 'not found' });
   user.blocked = true;
-  for (const tok of Object.keys(db.sessions)) {
-    if (db.sessions[tok] === user.id) delete db.sessions[tok];
-  }
+  for (const tok of Object.keys(db.sessions)) { if (db.sessions[tok] === user.id) delete db.sessions[tok]; }
   saveDB(db);
   res.json({ ok: true });
 });
@@ -728,33 +633,22 @@ app.delete('/api/admin/users/:id', adminAuth, (req, res) => {
   delete db.licenses[req.params.id];
   delete db.passports[req.params.id];
   delete db.cards[req.params.id];
-  for (const tok of Object.keys(db.sessions)) {
-    if (db.sessions[tok] === req.params.id) delete db.sessions[tok];
-  }
+  for (const tok of Object.keys(db.sessions)) { if (db.sessions[tok] === req.params.id) delete db.sessions[tok]; }
   saveDB(db);
   res.json({ ok: true });
 });
 
-app.get('/api/admin/cars', adminAuth, (req, res) => {
-  res.json({ cars: req.db.cars });
-});
+app.get('/api/admin/cars', adminAuth, (req, res) => { res.json({ cars: req.db.cars }); });
 
 app.post('/api/admin/cars', adminAuth, (req, res) => {
   const db = loadDB();
   const { brand, model, plate, lat, lon, fuel, ratePerMin, photo } = req.body || {};
-  if (!brand || !model || !plate) {
-    return res.status(400).json({ error: 'Бренд, модель и гос. номер обязательны' });
-  }
+  if (!brand || !model || !plate) return res.status(400).json({ error: 'Бренд, модель и гос. номер обязательны' });
   const car = {
-    id: crypto.randomUUID(),
-    brand, model, plate,
-    lat: parseFloat(lat) || 55.7558,
-    lon: parseFloat(lon) || 37.6173,
-    fuel: parseInt(fuel) || 100,
-    ratePerMin: parseInt(ratePerMin) || 8,
-    deposit: 150,
-    status: 'available',
-    photo: photo || null
+    id: crypto.randomUUID(), brand, model, plate,
+    lat: parseFloat(lat) || 55.7558, lon: parseFloat(lon) || 37.6173,
+    fuel: parseInt(fuel) || 100, ratePerMin: parseInt(ratePerMin) || 8,
+    deposit: 150, status: 'available', photo: photo || null
   };
   db.cars.push(car);
   saveDB(db);
@@ -789,43 +683,24 @@ app.delete('/api/admin/cars/:id', adminAuth, (req, res) => {
 });
 
 app.get('/api/admin/trips', adminAuth, (req, res) => {
-  const trips = req.db.trips
-    .slice()
-    .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))
-    .map(t => {
-      const user = req.db.users.find(u => u.id === t.userId);
-      const car = req.db.cars.find(c => c.id === t.carId);
-      return {
-        ...t,
-        user: user ? { fullName: user.fullName, email: user.email } : null,
-        car: car ? { brand: car.brand, model: car.model, plate: car.plate } : null
-      };
-    });
+  const trips = req.db.trips.slice().sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt)).map(t => {
+    const user = req.db.users.find(u => u.id === t.userId);
+    const car = req.db.cars.find(c => c.id === t.carId);
+    return { ...t, user: user ? { fullName: user.fullName, email: user.email } : null, car: car ? { brand: car.brand, model: car.model, plate: car.plate } : null };
+  });
   res.json({ trips });
 });
 
 app.get('/api/admin/bookings', adminAuth, (req, res) => {
-  const bookings = req.db.bookings
-    .slice()
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .map(b => {
-      const user = req.db.users.find(u => u.id === b.userId);
-      const car = req.db.cars.find(c => c.id === b.carId);
-      return {
-        ...b,
-        user: user ? { fullName: user.fullName, email: user.email } : null,
-        car: car ? { brand: car.brand, model: car.model, plate: car.plate } : null
-      };
-    });
+  const bookings = req.db.bookings.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(b => {
+    const user = req.db.users.find(u => u.id === b.userId);
+    const car = req.db.cars.find(c => c.id === b.carId);
+    return { ...b, user: user ? { fullName: user.fullName, email: user.email } : null, car: car ? { brand: car.brand, model: car.model, plate: car.plate } : null };
+  });
   res.json({ bookings });
 });
 
-
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'index.html')); });
 
 seedCarsIfEmpty();
-app.listen(PORT, () => {
-    console.log(`\nCarShare запущен на http://localhost:${PORT}\n`);
-});
+app.listen(PORT, () => { console.log(`\nCarShare запущен на http://localhost:${PORT}\n`); });

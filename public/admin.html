@@ -7,16 +7,16 @@
   <link rel="stylesheet" href="/css/style.css">
   <style>
     .admin-container { max-width: 1200px; margin: 0 auto; padding: 24px 20px; }
-    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 24px; flex-wrap: wrap; }
-    .tab { padding: 10px 18px; color: var(--text-dim); cursor: pointer; border-bottom: 2px solid transparent; font-size: 14px; user-select: none; }
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 24px; flex-wrap: wrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .tab { padding: 10px 16px; color: var(--text-dim); cursor: pointer; border-bottom: 2px solid transparent; font-size: 14px; user-select: none; white-space: nowrap; flex-shrink: 0; }
     .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
     .tab:hover { color: var(--text); }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
-    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
-    .stat-card .label { color: var(--text-dim); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
-    .stat-card .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+    .stat-card .label { color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+    .stat-card .value { font-size: 26px; font-weight: 700; margin-top: 4px; }
     .stat-card .value.accent { color: var(--accent); }
     .stat-card .value.danger { color: var(--danger); }
     .stat-card .value.warning { color: var(--warning); }
@@ -25,15 +25,15 @@
     .data-table th { background: var(--surface-2); color: var(--text-dim); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
     .data-table tr:last-child td { border-bottom: none; }
     .data-table tr:hover { background: rgba(255,255,255,.02); }
-    .data-table .actions { display: flex; gap: 4px; }
-    .data-table .actions button { padding: 4px 8px; font-size: 12px; width: auto; border-radius: 6px; }
-    .table-wrap { overflow-x: auto; margin-bottom: 16px; }
+    .data-table .actions { display: flex; gap: 4px; flex-wrap: wrap; }
+    .data-table .actions button { padding: 5px 10px; font-size: 12px; width: auto; border-radius: 6px; }
+    .table-wrap { overflow-x: auto; margin-bottom: 16px; -webkit-overflow-scrolling: touch; border-radius: 12px; }
     .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
-    .toolbar .search { flex: 1; min-width: 200px; }
+    .toolbar .search { flex: 1; min-width: 160px; }
     .toolbar input { padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); width: 100%; font-size: 14px; }
     .toolbar .btn { width: auto; padding: 8px 14px; font-size: 14px; }
     .mini-info { font-size: 11px; color: var(--text-dim); }
-    .status-cell { display: inline-block; padding: 2px 8px; border-radius: 100px; font-size: 11px; font-weight: 600; }
+    .status-cell { display: inline-block; padding: 2px 8px; border-radius: 100px; font-size: 11px; font-weight: 600; white-space: nowrap; }
     .status-available { background: rgba(110,231,183,.15); color: var(--accent); }
     .status-booked { background: rgba(251,191,36,.15); color: var(--warning); }
     .status-in_trip { background: rgba(96,165,250,.15); color: var(--primary); }
@@ -42,6 +42,30 @@
     .status-cancelled, .status-expired { background: rgba(248,113,113,.15); color: var(--danger); }
     .status-awaiting_license, .status-awaiting_passport { background: rgba(251,191,36,.15); color: var(--warning); }
     .blocked-badge { background: rgba(248,113,113,.15); color: var(--danger); padding: 2px 8px; border-radius: 100px; font-size: 11px; font-weight: 600; }
+    .nav-btn-refresh { background: rgba(96,165,250,.15); color: var(--primary) !important; border-radius: 8px; display: flex; align-items: center; gap: 5px; }
+    .nav-btn-refresh:hover { background: rgba(96,165,250,.28) !important; color: var(--primary) !important; }
+    .nav-btn-logout { background: rgba(248,113,113,.15); color: var(--danger) !important; border-radius: 8px; display: flex; align-items: center; gap: 5px; }
+    .nav-btn-logout:hover { background: rgba(248,113,113,.28) !important; color: var(--danger) !important; }
+    @media (max-width: 640px) {
+      .admin-container { padding: 12px 10px; }
+      .app-header { padding: 10px 12px; flex-wrap: wrap; gap: 8px; }
+      .logo { font-size: 16px; }
+      .nav { gap: 4px; }
+      .nav a { padding: 6px 9px; font-size: 13px; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      .stat-card { padding: 12px; }
+      .stat-card .value { font-size: 22px; }
+      .tabs { gap: 2px; margin-bottom: 16px; }
+      .tab { padding: 8px 12px; font-size: 13px; }
+      .data-table th:nth-child(n+5), .data-table td:nth-child(n+5) { display: none; }
+      .data-table th:last-child, .data-table td:last-child { display: table-cell; }
+      .data-table th, .data-table td { padding: 8px 8px; font-size: 12px; }
+    }
+    @media (max-width: 400px) {
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .data-table th:nth-child(n+4), .data-table td:nth-child(n+4) { display: none; }
+      .data-table th:last-child, .data-table td:last-child { display: table-cell; }
+    }
   </style>
 </head>
 <body>
@@ -49,8 +73,8 @@
     <header class="app-header">
       <div class="logo">Car<span>Share</span> · <span style="color:var(--text-dim);font-weight:400">админ-панель</span></div>
       <div class="nav">
-        <a href="#" id="reloadLink">Обновить</a>
-        <a href="#" id="logoutLink">Выйти</a>
+        <a href="#" id="reloadLink" class="nav-btn-refresh">↺ Обновить</a>
+        <a href="#" id="logoutLink" class="nav-btn-logout">✕ Выйти</a>
       </div>
     </header>
 
@@ -58,6 +82,7 @@
       <div class="tabs">
         <div class="tab active" data-tab="dashboard">Дашборд</div>
         <div class="tab" data-tab="users">Пользователи</div>
+        <div class="tab" data-tab="docs">Документы <span id="docsCount" style="background:var(--danger);color:white;border-radius:100px;padding:1px 7px;font-size:11px;font-weight:700;display:none;margin-left:4px"></span></div>
         <div class="tab" data-tab="cars">Автопарк</div>
         <div class="tab" data-tab="bookings">Брони</div>
         <div class="tab" data-tab="trips">Поездки</div>
@@ -73,19 +98,22 @@
         </div>
         <div class="table-wrap">
           <table class="data-table">
-            <thead>
-              <tr>
-                <th>ФИО / Email</th>
-                <th>Телефон</th>
-                <th>Статус</th>
-                <th>Документы</th>
-                <th>Карт</th>
-                <th>Поездок</th>
-                <th>Потрачено</th>
-                <th>Действия</th>
-              </tr>
-            </thead>
+            <thead><tr>
+              <th>ФИО / Email</th><th>Телефон</th><th>Статус</th><th>Документы</th>
+              <th>Карт</th><th>Поездок</th><th>Потрачено</th><th>Действия</th>
+            </tr></thead>
             <tbody id="usersTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tab-content" id="tab-docs">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th>Пользователь</th><th>Тип</th><th>Номер</th><th>Загружен</th><th>Статус</th><th>Действия</th>
+            </tr></thead>
+            <tbody id="docsTable"></tbody>
           </table>
         </div>
       </div>
@@ -97,17 +125,9 @@
         </div>
         <div class="table-wrap">
           <table class="data-table">
-            <thead>
-              <tr>
-                <th>Марка / Модель</th>
-                <th>Гос. номер</th>
-                <th>Статус</th>
-                <th>Топливо</th>
-                <th>Тариф</th>
-                <th>Координаты</th>
-                <th>Действия</th>
-              </tr>
-            </thead>
+            <thead><tr>
+              <th>Марка / Модель</th><th>Гос. номер</th><th>Статус</th><th>Топливо</th><th>Тариф</th><th>Координаты</th><th>Действия</th>
+            </tr></thead>
             <tbody id="carsTable"></tbody>
           </table>
         </div>
@@ -116,15 +136,7 @@
       <div class="tab-content" id="tab-bookings">
         <div class="table-wrap">
           <table class="data-table">
-            <thead>
-              <tr>
-                <th>Создана</th>
-                <th>Истекает</th>
-                <th>Пользователь</th>
-                <th>Авто</th>
-                <th>Статус</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Создана</th><th>Истекает</th><th>Пользователь</th><th>Авто</th><th>Статус</th></tr></thead>
             <tbody id="bookingsTable"></tbody>
           </table>
         </div>
@@ -133,17 +145,7 @@
       <div class="tab-content" id="tab-trips">
         <div class="table-wrap">
           <table class="data-table">
-            <thead>
-              <tr>
-                <th>Дата</th>
-                <th>Пользователь</th>
-                <th>Авто</th>
-                <th>Длительность</th>
-                <th>Расстояние</th>
-                <th>Стоимость</th>
-                <th>Статус</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Дата</th><th>Пользователь</th><th>Авто</th><th>Длительность</th><th>Расстояние</th><th>Стоимость</th><th>Статус</th></tr></thead>
             <tbody id="tripsTable"></tbody>
           </table>
         </div>
@@ -188,12 +190,8 @@
   <script src="/js/api.js"></script>
   <script>
     (async () => {
-      try {
-        await api('/api/admin/me');
-      } catch (_) {
-        window.location.href = '/admin-login.html';
-        return;
-      }
+      try { await api('/api/admin/me'); }
+      catch (_) { window.location.href = '/admin-login.html'; return; }
       loadAll();
     })();
 
@@ -214,7 +212,7 @@
     document.getElementById('reloadLink').addEventListener('click', (e) => { e.preventDefault(); loadAll(); });
 
     async function loadAll() {
-      await Promise.all([loadStats(), loadUsers(), loadCars(), loadBookings(), loadTrips()]);
+      await Promise.all([loadStats(), loadUsers(), loadDocs(), loadCars(), loadBookings(), loadTrips()]);
     }
 
     async function loadStats() {
@@ -234,10 +232,7 @@
         { label: 'Средний чек', value: stats.avgTripCost + ' ₽' }
       ];
       document.getElementById('statsGrid').innerHTML = cards.map(c => `
-        <div class="stat-card">
-          <div class="label">${c.label}</div>
-          <div class="value ${c.cls || ''}">${c.value}</div>
-        </div>
+        <div class="stat-card"><div class="label">${c.label}</div><div class="value ${c.cls || ''}">${c.value}</div></div>
       `).join('');
     }
 
@@ -257,27 +252,19 @@
         ? '<tr><td colspan="8" style="text-align:center;color:var(--text-dim)">Нет пользователей</td></tr>'
         : filtered.map(u => `
         <tr>
-          <td>
-            <div>${escapeHtml(u.fullName)} ${u.blocked ? '<span class="blocked-badge">Заблокирован</span>' : ''}</div>
-            <div class="mini-info">${escapeHtml(u.email)}</div>
-          </td>
+          <td><div>${escapeHtml(u.fullName)} ${u.blocked ? '<span class="blocked-badge">Заблокирован</span>' : ''}</div><div class="mini-info">${escapeHtml(u.email)}</div></td>
           <td>${escapeHtml(u.phone)}</td>
           <td><span class="status-cell status-${u.status}">${statusLabel[u.status] || u.status}</span></td>
-          <td>
-            ${u.license ? '✓ ВУ' : '— ВУ'}<br>
-            ${u.passport ? '✓ Паспорт' : '— Паспорт'}
-          </td>
+          <td>${u.license ? '✓ ВУ' : '— ВУ'}<br>${u.passport ? '✓ Паспорт' : '— Паспорт'}</td>
           <td>${u.cardsCount}</td>
           <td>${u.tripsCount}</td>
           <td>${u.totalSpent} ₽</td>
-          <td>
-            <div class="actions">
-              ${u.blocked
-                ? `<button class="btn btn-secondary" data-action="unblock" data-id="${u.id}">Разблок.</button>`
-                : `<button class="btn btn-secondary" data-action="block" data-id="${u.id}">Блокир.</button>`}
-              <button class="btn btn-danger" data-action="delete" data-id="${u.id}">Удалить</button>
-            </div>
-          </td>
+          <td><div class="actions">
+            ${u.blocked
+              ? `<button class="btn btn-secondary" data-action="unblock" data-id="${u.id}">Разблок.</button>`
+              : `<button class="btn btn-secondary" data-action="block" data-id="${u.id}">Блокир.</button>`}
+            <button class="btn btn-danger" data-action="delete" data-id="${u.id}">Удалить</button>
+          </div></td>
         </tr>
       `).join('');
     }
@@ -285,20 +272,55 @@
     document.getElementById('usersTable').addEventListener('click', async (e) => {
       const btn = e.target.closest('button[data-action]');
       if (!btn) return;
-      const id = btn.dataset.id;
-      const action = btn.dataset.action;
+      const id = btn.dataset.id, action = btn.dataset.action;
       try {
-        if (action === 'block') {
-          if (!confirm('Заблокировать пользователя? Все его сессии будут разорваны.')) return;
-          await api(`/api/admin/users/${id}/block`, { method: 'POST' });
-        } else if (action === 'unblock') {
-          await api(`/api/admin/users/${id}/unblock`, { method: 'POST' });
-        } else if (action === 'delete') {
-          if (!confirm('Удалить пользователя? Это необратимо.')) return;
-          await api(`/api/admin/users/${id}`, { method: 'DELETE' });
+        if (action === 'block') { if (!confirm('Заблокировать пользователя?')) return; await api(`/api/admin/users/${id}/block`, { method: 'POST' }); }
+        else if (action === 'unblock') { await api(`/api/admin/users/${id}/unblock`, { method: 'POST' }); }
+        else if (action === 'delete') { if (!confirm('Удалить пользователя? Это необратимо.')) return; await api(`/api/admin/users/${id}`, { method: 'DELETE' }); }
+        await loadUsers(); await loadStats();
+      } catch (err) { alert(err.message); }
+    });
+
+    async function loadDocs() {
+      let docs = [];
+      try { const res = await api('/api/admin/docs'); docs = res.docs || []; }
+      catch (e) { console.error(e); }
+      const pending = docs.filter(d => d.status === 'pending').length;
+      const badge = document.getElementById('docsCount');
+      if (pending > 0) { badge.textContent = pending; badge.style.display = 'inline'; }
+      else { badge.style.display = 'none'; }
+      const typeLabel = { license: '🪪 ВУ', passport: '📄 Паспорт' };
+      const statusLabel = { pending: 'На проверке', approved: 'Принят', rejected: 'Отклонён' };
+      document.getElementById('docsTable').innerHTML = docs.length === 0
+        ? '<tr><td colspan="6" style="text-align:center;color:var(--text-dim)">Нет документов</td></tr>'
+        : docs.map(d => `
+        <tr>
+          <td><div>${escapeHtml(d.userName || '—')}</div><div class="mini-info">${escapeHtml(d.userEmail || '')}</div></td>
+          <td>${typeLabel[d.type] || d.type}</td>
+          <td>${escapeHtml(d.number || '—')}</td>
+          <td>${d.submittedAt ? new Date(d.submittedAt).toLocaleString('ru-RU') : '—'}</td>
+          <td><span class="status-cell ${d.status === 'approved' ? 'status-active' : d.status === 'rejected' ? 'status-cancelled' : 'status-booked'}">${statusLabel[d.status] || d.status}</span></td>
+          <td><div class="actions">
+            ${d.status === 'pending' ? `
+              <button class="btn btn-primary" style="background:var(--accent);color:#053" data-doc-action="approve" data-user-id="${d.userId}" data-doc-type="${d.type}">✓ Принять</button>
+              <button class="btn btn-danger" data-doc-action="reject" data-user-id="${d.userId}" data-doc-type="${d.type}">✕ Отклонить</button>
+            ` : '—'}
+          </div></td>
+        </tr>
+      `).join('');
+    }
+    document.getElementById('docsTable').addEventListener('click', async (e) => {
+      const btn = e.target.closest('button[data-doc-action]');
+      if (!btn) return;
+      const userId = btn.dataset.userId, docType = btn.dataset.docType, action = btn.dataset.docAction;
+      try {
+        if (action === 'approve') {
+          await api(`/api/admin/users/${userId}/docs/${docType}/approve`, { method: 'POST' });
+        } else if (action === 'reject') {
+          const reason = prompt('Причина отклонения (необязательно):') || '';
+          await api(`/api/admin/users/${userId}/docs/${docType}/reject`, { method: 'POST', body: { reason } });
         }
-        await loadUsers();
-        await loadStats();
+        await loadDocs(); await loadUsers(); await loadStats();
       } catch (err) { alert(err.message); }
     });
 
@@ -310,9 +332,7 @@
     }
     function renderCars() {
       const q = document.getElementById('carsSearch').value.toLowerCase();
-      const filtered = allCars.filter(c =>
-        !q || (c.brand + ' ' + c.model).toLowerCase().includes(q) || (c.plate || '').toLowerCase().includes(q)
-      );
+      const filtered = allCars.filter(c => !q || (c.brand + ' ' + c.model).toLowerCase().includes(q) || (c.plate || '').toLowerCase().includes(q));
       const statusLabel = { available: 'Доступен', booked: 'Забронирован', in_trip: 'В поездке', maintenance: 'Обслуживание' };
       document.getElementById('carsTable').innerHTML = filtered.length === 0
         ? '<tr><td colspan="7" style="text-align:center;color:var(--text-dim)">Нет авто</td></tr>'
@@ -324,12 +344,10 @@
           <td>${c.fuel}%</td>
           <td>${c.ratePerMin} ₽/мин</td>
           <td class="mini-info">${c.lat.toFixed(4)}, ${c.lon.toFixed(4)}</td>
-          <td>
-            <div class="actions">
-              <button class="btn btn-secondary" data-action="edit" data-id="${c.id}">✎</button>
-              <button class="btn btn-danger" data-action="delete" data-id="${c.id}">×</button>
-            </div>
-          </td>
+          <td><div class="actions">
+            <button class="btn btn-secondary" data-action="edit" data-id="${c.id}">✎</button>
+            <button class="btn btn-danger" data-action="delete" data-id="${c.id}">×</button>
+          </div></td>
         </tr>
       `).join('');
     }
@@ -339,16 +357,11 @@
       const btn = e.target.closest('button[data-action]');
       if (!btn) return;
       const id = btn.dataset.id;
-      if (btn.dataset.action === 'edit') {
-        const car = allCars.find(c => c.id === id);
-        openCarModal(car);
-      } else if (btn.dataset.action === 'delete') {
+      if (btn.dataset.action === 'edit') { openCarModal(allCars.find(c => c.id === id)); }
+      else if (btn.dataset.action === 'delete') {
         if (!confirm('Удалить автомобиль?')) return;
-        try {
-          await api(`/api/admin/cars/${id}`, { method: 'DELETE' });
-          await loadCars();
-          await loadStats();
-        } catch (err) { alert(err.message); }
+        try { await api(`/api/admin/cars/${id}`, { method: 'DELETE' }); await loadCars(); await loadStats(); }
+        catch (err) { alert(err.message); }
       }
     });
 
@@ -361,22 +374,15 @@
       const form = document.getElementById('carForm');
       form.reset();
       if (car) {
-        form.brand.value = car.brand;
-        form.model.value = car.model;
-        form.plate.value = car.plate;
-        form.ratePerMin.value = car.ratePerMin;
-        form.fuel.value = car.fuel;
-        form.lat.value = car.lat;
-        form.lon.value = car.lon;
-        form.photo.value = car.photo || '';
-        form.status.value = car.status;
+        form.brand.value = car.brand; form.model.value = car.model; form.plate.value = car.plate;
+        form.ratePerMin.value = car.ratePerMin; form.fuel.value = car.fuel;
+        form.lat.value = car.lat; form.lon.value = car.lon;
+        form.photo.value = car.photo || ''; form.status.value = car.status;
       }
       hideAlert(document.getElementById('carAlert'));
       document.getElementById('carModal').style.display = 'flex';
     }
-    document.getElementById('carCancelBtn').addEventListener('click', () => {
-      document.getElementById('carModal').style.display = 'none';
-    });
+    document.getElementById('carCancelBtn').addEventListener('click', () => { document.getElementById('carModal').style.display = 'none'; });
     document.getElementById('carForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
@@ -385,14 +391,10 @@
       const alertEl = document.getElementById('carAlert');
       hideAlert(alertEl);
       try {
-        if (editingCarId) {
-          await api(`/api/admin/cars/${editingCarId}`, { method: 'PUT', body: payload });
-        } else {
-          await api('/api/admin/cars', { method: 'POST', body: payload });
-        }
+        if (editingCarId) await api(`/api/admin/cars/${editingCarId}`, { method: 'PUT', body: payload });
+        else await api('/api/admin/cars', { method: 'POST', body: payload });
         document.getElementById('carModal').style.display = 'none';
-        await loadCars();
-        await loadStats();
+        await loadCars(); await loadStats();
       } catch (err) { showError(alertEl, err.message); }
     });
 
